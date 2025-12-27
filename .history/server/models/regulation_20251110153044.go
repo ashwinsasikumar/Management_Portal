@@ -1,0 +1,11 @@
+package models
+package models
+
+import "time"
+
+type Regulation struct {
+	ID           int       `json:"id"`
+	Name         string    `json:"name"`
+	AcademicYear string    `json:"academic_year"`
+	CreatedAt    time.Time `json:"created_at"`
+}

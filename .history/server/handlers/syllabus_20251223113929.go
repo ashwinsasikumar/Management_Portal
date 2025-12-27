@@ -1,0 +1,136 @@
+package handlers
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"server/models"
+	"strconv"
+
+	"github.com/gorilla/mux"
+)
+
+// GetCourseSyllabus handles GET /course/:courseId/syllabus
+// Fetches data from normalized tables and returns in the same JSON format as before
+func GetCourseSyllabus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(r)
+	courseID, err := strconv.Atoi(vars["courseId"])
+	if err != nil {
+		http.Error(w, "Invalid course ID", http.StatusBadRequest)
+		return
+	}
+
+	// Ensure syllabus record exists
+	syllabusID, err := ensureSyllabusRecord(courseID)
+	if err != nil {
+		log.Println("Error ensuring syllabus record:", err)
+		http.Error(w, "Failed to fetch syllabus", http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch all data from normalized tables
+	syllabus := models.Syllabus{
+		ID:       syllabusID,
+		CourseID: courseID,
+	}
+
+	syllabus.Objectives, _ = fetchObjectives(courseID)
+	syllabus.Outcomes, _ = fetchOutcomes(courseID)
+	syllabus.ReferenceList, _ = fetchReferences(courseID)
+	syllabus.Prerequisites, _ = fetchPrerequisites(courseID)
+	syllabus.Teamwork, _ = fetchTeamwork(courseID)
+	syllabus.SelfLearning, _ = fetchSelfLearning(courseID)
+
+	json.NewEncoder(w).Encode(syllabus)
+}
+
+// SaveCourseSyllabus handles POST /course/:courseId/syllabus
+// Saves data to normalized tables while maintaining the same API interface
+// Accepts either a Syllabus object or just the header fields
+func SaveCourseSyllabus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(r)
+	courseID, err := strconv.Atoi(vars["courseId"])
+	if err != nil {
+		http.Error(w, "Invalid course ID", http.StatusBadRequest)
+		return
+	}
+
+	// Parse request body - it could be just header fields or full syllabus
+	var requestData struct {
+		Objectives    []string                     `json:"objectives"`
+		Outcomes      []string                     `json:"outcomes"`
+		ReferenceList []string                     `json:"reference_list"`
+		Prerequisites []string                     `json:"prerequisites"`
+		Teamwork      *models.Teamwork             `json:"teamwork"`
+		SelfLearning  *models.SelfLearning         `json:"selflearning"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		log.Println("Error decoding request body:", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Ensure syllabus record exists
+	syllabusID, err := ensureSyllabusRecord(courseID)
+	if err != nil {
+		log.Println("Error ensuring syllabus record:", err)
+		http.Error(w, "Failed to save syllabus", http.StatusInternalServerError)
+		return
+	}
+
+	// Save all data to normalized tables
+	if err := saveObjectives(courseID, requestData.Objectives); err != nil {
+		log.Println("Error saving objectives:", err)
+		http.Error(w, "Failed to save objectives", http.StatusInternalServerError)
+		return
+	}
+
+	if err := saveOutcomes(courseID, requestData.Outcomes); err != nil {
+		log.Println("Error saving outcomes:", err)
+		http.Error(w, "Failed to save outcomes", http.StatusInternalServerError)
+		return
+	}
+
+	if err := saveReferences(courseID, requestData.ReferenceList); err != nil {
+		log.Println("Error saving references:", err)
+		http.Error(w, "Failed to save references", http.StatusInternalServerError)
+		return
+	}
+
+	if err := savePrerequisites(courseID, requestData.Prerequisites); err != nil {
+		log.Println("Error saving prerequisites:", err)
+		http.Error(w, "Failed to save prerequisites", http.StatusInternalServerError)
+		return
+	}
+
+	if err := saveTeamwork(courseID, requestData.Teamwork); err != nil {
+		log.Println("Error saving teamwork:", err)
+		http.Error(w, "Failed to save teamwork", http.StatusInternalServerError)
+		return
+	}
+
+	if err := saveSelfLearning(courseID, requestData.SelfLearning); err != nil {
+		log.Println("Error saving self-learning:", err)
+		http.Error(w, "Failed to save self-learning", http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response
+	response := models.Syllabus{
+		ID:            syllabusID,
+		CourseID:      courseID,
+		Objectives:    requestData.Objectives,
+		Outcomes:      requestData.Outcomes,
+		ReferenceList: requestData.ReferenceList,
+		Prerequisites: requestData.Prerequisites,
+		Teamwork:      requestData.Teamwork,
+		SelfLearning:  requestData.SelfLearning,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
