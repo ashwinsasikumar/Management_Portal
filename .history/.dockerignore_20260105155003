@@ -1,0 +1,17 @@
+# Docker ignore
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+node_modules
+.DS_Store
+.history
+*.md
+README.md
+
+# Don't ignore these for Docker
+!.env.example
+!docker-compose.yml
+!*/Dockerfile
+!*/nginx.conf
