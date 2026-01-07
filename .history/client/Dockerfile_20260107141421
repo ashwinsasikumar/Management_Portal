@@ -35,5 +35,6 @@ COPY --from=builder /app/dist ./dist
 # Expose port
 EXPOSE 80
 
+
 # Start the application
-CMD ["serve", "-s", "dist", "-l", "80"]
+CMD ["serve", "-s", "dist", "-l", "8080"]

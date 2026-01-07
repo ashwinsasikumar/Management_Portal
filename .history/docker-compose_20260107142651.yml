@@ -1,0 +1,147 @@
+version: '3.9'
+
+services:
+  # Frontend Service
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: management-portal-frontend
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - management-portal-network
+    environment:
+      - REACT_APP_API_URL=http://backend:8080
+
+  # Backend Service
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: management-portal-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./server/.env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-management_portal}
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/pdfs:/app/pdfs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - management-portal-network
+
+  # MySQL Database Service
+  mysql:
+    image: mysql:8.0
+    container_name: management-portal-mysql
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./server/database:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - management-portal-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  management-portal-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+
+
+
+
+
+
+
+
+
+
+version: '3.9'
+
+services:
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL}
+    container_name: bitmeetings-frontend
+    ports:
+      - "8080:80"
+    env_file:
+      - /envs/bit-meetings-frontend.env
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - bitmeetings-network
+
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bitmeetings-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - /envs/bit-meetings-backend.env
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      - mysql
+    restart: unless-stopped
+    networks:
+      - bitmeetings-network
+
+  # MySQL Database Service (Optional - if you're using MySQL)
+  mysql:
+    image: mysql:8.0
+    container_name: bitmeetings-mysql
+    ports:
+      - "3306:3306"
+    env_file:
+      - /envs/bit-meetings-mysql.env
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - bitmeetings-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  bitmeetings-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

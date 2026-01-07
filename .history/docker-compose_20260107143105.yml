@@ -1,3 +1,14 @@
+
+
+
+
+
+
+
+
+
+
+
 version: '3.9'
 
 services:
@@ -18,7 +29,6 @@ services:
     restart: unless-stopped
     networks:
       - cms-network
-      - reverse-proxy
 
   # Backend Service
   backend:
@@ -37,7 +47,6 @@ services:
     restart: unless-stopped
     networks:
       - cms-network
-      - reverse-proxy
 
   # MySQL Database Service (Optional - if you're using MySQL)
   mysql:
@@ -47,21 +56,16 @@ services:
       - "3309:3306"
     env_file:
       - /envs/cms-mysql.env
-    command:
-      --bind-address=0.0.0.0
     volumes:
       - mysql_data:/var/lib/mysql
       - ./server/database:/docker-entrypoint-initdb.d
     restart: unless-stopped
     networks:
       - cms-network
-      - reverse-proxy
 
 networks:
   cms-network:
     driver: bridge
-  reverse-proxy:
-    external: true
 
 volumes:
   mysql_data:

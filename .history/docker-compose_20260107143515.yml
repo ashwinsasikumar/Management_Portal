@@ -48,7 +48,7 @@ services:
     env_file:
       - /envs/cms-mysql.env
     command:
-      --bind-address=0.0.0.0
+      
     volumes:
       - mysql_data:/var/lib/mysql
       - ./server/database:/docker-entrypoint-initdb.d
@@ -60,8 +60,6 @@ services:
 networks:
   cms-network:
     driver: bridge
-  reverse-proxy:
-    external: true
 
 volumes:
   mysql_data:
