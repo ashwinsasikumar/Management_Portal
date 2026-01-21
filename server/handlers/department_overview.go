@@ -27,20 +27,20 @@ func GetDepartmentOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT id, regulation_id, vision FROM department_overview WHERE regulation_id = ?`
+	query := `SELECT id, curriculum_id, vision FROM curriculum_vision WHERE curriculum_id = ?`
 
 	var overview models.DepartmentOverview
 
 	err = db.DB.QueryRow(query, regulationID).Scan(
 		&overview.ID,
-		&overview.RegulationID,
+		&overview.CurriculumID,
 		&overview.Vision,
 	)
 
 	if err == sql.ErrNoRows {
 		// Return empty structure with default values
 		overview = models.DepartmentOverview{
-			RegulationID: regulationID,
+			CurriculumID: regulationID,
 			Vision:       "",
 			Mission:      []models.DepartmentListItem{},
 			PEOs:         []models.DepartmentListItem{},
@@ -60,16 +60,16 @@ func GetDepartmentOverview(w http.ResponseWriter, r *http.Request) {
 	departmentID := overview.ID
 
 	// Fetch mission items ordered by position
-	overview.Mission = fetchDepartmentList(departmentID, "department_mission", "mission_text")
+	overview.Mission = fetchDepartmentList(departmentID, "curriculum_mission", "mission_text")
 
 	// Fetch PEOs ordered by position
-	overview.PEOs = fetchDepartmentList(departmentID, "department_peos", "peo_text")
+	overview.PEOs = fetchDepartmentList(departmentID, "curriculum_peos", "peo_text")
 
 	// Fetch POs ordered by position
-	overview.POs = fetchDepartmentList(departmentID, "department_pos", "po_text")
+	overview.POs = fetchDepartmentList(departmentID, "curriculum_pos", "po_text")
 
 	// Fetch PSOs ordered by position
-	overview.PSOs = fetchDepartmentList(departmentID, "department_psos", "pso_text")
+	overview.PSOs = fetchDepartmentList(departmentID, "curriculum_psos", "pso_text")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(overview)
@@ -79,7 +79,7 @@ func GetDepartmentOverview(w http.ResponseWriter, r *http.Request) {
 // Note: Shared items are now physically replicated in the database with source_department_id,
 // so we only need to fetch items for this department (includes both owned and shared items)
 func fetchDepartmentList(departmentID int, tableName, columnName string) []models.DepartmentListItem {
-	query := fmt.Sprintf("SELECT id, %s, visibility, source_department_id FROM %s WHERE department_id = ? ORDER BY position", columnName, tableName)
+	query := fmt.Sprintf("SELECT id, %s, visibility, source_department_id FROM %s WHERE curriculum_id = ? ORDER BY position", columnName, tableName)
 	rows, err := db.DB.Query(query, departmentID)
 	if err != nil {
 		return []models.DepartmentListItem{}
@@ -129,31 +129,31 @@ func SaveDepartmentOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	overview.RegulationID = regulationID
+	overview.CurriculumID = regulationID
 
 	// Fetch existing data for diff
 	var oldOverview models.DepartmentOverview
 	var departmentID int
-	fetchQuery := "SELECT id, vision FROM department_overview WHERE regulation_id = ?"
+	fetchQuery := "SELECT id, vision FROM curriculum_vision WHERE curriculum_id = ?"
 	fetchErr := db.DB.QueryRow(fetchQuery, regulationID).Scan(&departmentID, &oldOverview.Vision)
 
 	hasExisting := fetchErr != sql.ErrNoRows
 	if hasExisting {
 		oldOverview.ID = departmentID
-		oldOverview.Mission = fetchDepartmentList(departmentID, "department_mission", "mission_text")
-		oldOverview.PEOs = fetchDepartmentList(departmentID, "department_peos", "peo_text")
-		oldOverview.POs = fetchDepartmentList(departmentID, "department_pos", "po_text")
-		oldOverview.PSOs = fetchDepartmentList(departmentID, "department_psos", "pso_text")
+		oldOverview.Mission = fetchDepartmentList(departmentID, "curriculum_mission", "mission_text")
+		oldOverview.PEOs = fetchDepartmentList(departmentID, "curriculum_peos", "peo_text")
+		oldOverview.POs = fetchDepartmentList(departmentID, "curriculum_pos", "po_text")
+		oldOverview.PSOs = fetchDepartmentList(departmentID, "curriculum_psos", "pso_text")
 	}
 
 	// Check if record exists
 	var existingID int
-	checkQuery := "SELECT id FROM department_overview WHERE regulation_id = ?"
+	checkQuery := "SELECT id FROM curriculum_vision WHERE curriculum_id = ?"
 	err = db.DB.QueryRow(checkQuery, regulationID).Scan(&existingID)
 
 	if err == sql.ErrNoRows {
 		// INSERT new record
-		insertQuery := `INSERT INTO department_overview (regulation_id, vision) VALUES (?, ?)`
+		insertQuery := `INSERT INTO curriculum_vision (curriculum_id, vision) VALUES (?, ?)`
 		result, err := db.DB.Exec(insertQuery, regulationID, overview.Vision)
 		if err != nil {
 			log.Println("Error inserting department overview:", err)
@@ -171,7 +171,7 @@ func SaveDepartmentOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	} else {
 		// UPDATE existing record
-		updateQuery := `UPDATE department_overview SET vision = ? WHERE regulation_id = ?`
+		updateQuery := `UPDATE curriculum_vision SET vision = ? WHERE curriculum_id = ?`
 		_, err := db.DB.Exec(updateQuery, overview.Vision, regulationID)
 		if err != nil {
 			log.Println("Error updating department overview:", err)
@@ -184,10 +184,10 @@ func SaveDepartmentOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save list items to normalized tables
-	saveDepartmentList(departmentID, "department_mission", "mission_text", overview.Mission)
-	saveDepartmentList(departmentID, "department_peos", "peo_text", overview.PEOs)
-	saveDepartmentList(departmentID, "department_pos", "po_text", overview.POs)
-	saveDepartmentList(departmentID, "department_psos", "pso_text", overview.PSOs)
+	saveDepartmentList(departmentID, "curriculum_mission", "mission_text", overview.Mission)
+	saveDepartmentList(departmentID, "curriculum_peos", "peo_text", overview.PEOs)
+	saveDepartmentList(departmentID, "curriculum_pos", "po_text", overview.POs)
+	saveDepartmentList(departmentID, "curriculum_psos", "pso_text", overview.PSOs)
 
 	// Generate granular diff and log the activity
 	if hasExisting {
@@ -229,7 +229,7 @@ func saveDepartmentList(departmentID int, tableName, columnName string, items []
 		sourceDepartmentID sql.NullInt64
 	})
 
-	query := fmt.Sprintf("SELECT id, %s, visibility, source_department_id FROM %s WHERE department_id = ?", columnName, tableName)
+	query := fmt.Sprintf("SELECT id, %s, visibility, source_department_id FROM %s WHERE curriculum_id = ?", columnName, tableName)
 	rows, err := db.DB.Query(query, departmentID)
 	if err != nil {
 		log.Printf("Error fetching existing items: %v\n", err)
@@ -284,13 +284,13 @@ func saveDepartmentList(departmentID int, tableName, columnName string, items []
 					// Determine item type for tracking table
 					itemType := ""
 					switch tableName {
-					case "department_mission":
+					case "curriculum_mission":
 						itemType = "mission"
-					case "department_peos":
+					case "curriculum_peos":
 						itemType = "peos"
-					case "department_pos":
+					case "curriculum_pos":
 						itemType = "pos"
-					case "department_psos":
+					case "curriculum_psos":
 						itemType = "psos"
 					}
 
@@ -298,7 +298,7 @@ func saveDepartmentList(departmentID int, tableName, columnName string, items []
 					// This prevents it from being deleted when we unshare the original
 					_, err := db.DB.Exec(`
 						DELETE FROM sharing_tracking 
-						WHERE target_dept_id = ? AND copied_item_id = ? AND item_type = ?
+						WHERE target_curriculum_id = ? AND copied_item_id = ? AND item_type = ?
 					`, departmentID, item.ID, itemType)
 					if err != nil {
 						log.Printf("Error removing from tracking table: %v\n", err)
@@ -318,9 +318,9 @@ func saveDepartmentList(departmentID int, tableName, columnName string, items []
 					var originalItemID int
 					findOriginalQuery := fmt.Sprintf(`
 						SELECT id FROM %s 
-						WHERE department_id = ? 
+						WHERE curriculum_id = ? 
 						AND %s = ? 
-						AND (source_department_id IS NULL OR source_department_id = ?)
+						AND (source_department_id IS NULL OR source_curriculum_id = ?)
 						AND visibility = 'CLUSTER'
 						LIMIT 1
 					`, tableName, columnName)
@@ -385,7 +385,7 @@ func saveDepartmentList(departmentID int, tableName, columnName string, items []
 			}
 
 			insertQuery := fmt.Sprintf(`
-				INSERT INTO %s (department_id, %s, visibility, position, source_department_id) 
+			INSERT INTO %s (curriculum_id, %s, visibility, position, source_department_id) 
 				VALUES (?, ?, ?, ?, NULL)
 			`, tableName, columnName)
 

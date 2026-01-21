@@ -2,7 +2,7 @@ package models
 
 type Semester struct {
 	ID             int    `json:"id"`
-	RegulationID   int    `json:"regulation_id"`
+	CurriculumID   int    `json:"curriculum_id"`
 	SemesterNumber *int   `json:"semester_number"`
 	CardType       string `json:"card_type"`
 }
@@ -14,12 +14,16 @@ type Course struct {
 	CourseType         string `json:"course_type"`
 	Category           string `json:"category"`
 	Credit             int    `json:"credit"`
-	TheoryHours        int    `json:"theory_hours"`
-	ActivityHours      int    `json:"activity_hours"`
-	LectureHours       int    `json:"lecture_hours"`
-	TutorialHours      int    `json:"tutorial_hours"`
-	PracticalHours     int    `json:"practical_hours"`
-	TotalHours         int    `json:"total_hours"`
+	LectureHrs         int    `json:"lecture_hrs"`
+	TutorialHrs        int    `json:"tutorial_hrs"`
+	PracticalHrs       int    `json:"practical_hrs"`
+	ActivityHrs        int    `json:"activity_hrs"`
+	TwSlHrs            int    `json:"tw_sl_hrs"`
+	TheoryTotalHrs     int    `json:"theory_total_hrs"`
+	TutorialTotalHrs   int    `json:"tutorial_total_hrs"`
+	ActivityTotalHrs   int    `json:"activity_total_hrs"`
+	PracticalTotalHrs  int    `json:"practical_total_hrs"`
+	TotalHrs           int    `json:"total_hrs"`
 	CIAMarks           int    `json:"cia_marks"`
 	SEEMarks           int    `json:"see_marks"`
 	TotalMarks         int    `json:"total_marks"`
@@ -28,7 +32,7 @@ type Course struct {
 
 type RegulationCourse struct {
 	ID           int `json:"id"`
-	RegulationID int `json:"regulation_id"`
+	CurriculumID int `json:"curriculum_id"`
 	SemesterID   int `json:"semester_id"`
 	CourseID     int `json:"course_id"`
 }
@@ -40,12 +44,16 @@ type CourseWithDetails struct {
 	CourseType         string `json:"course_type"`
 	Category           string `json:"category"`
 	Credit             int    `json:"credit"`
-	TheoryHours        int    `json:"theory_hours"`
-	ActivityHours      int    `json:"activity_hours"`
-	LectureHours       int    `json:"lecture_hours"`
-	TutorialHours      int    `json:"tutorial_hours"`
-	PracticalHours     int    `json:"practical_hours"`
-	TotalHours         int    `json:"total_hours"`
+	LectureHrs         int    `json:"lecture_hrs"`
+	TutorialHrs        int    `json:"tutorial_hrs"`
+	PracticalHrs       int    `json:"practical_hrs"`
+	ActivityHrs        int    `json:"activity_hrs"`
+	TwSlHrs            int    `json:"tw_sl_hrs"`
+	TheoryTotalHrs     int    `json:"theory_total_hrs"`
+	TutorialTotalHrs   int    `json:"tutorial_total_hrs"`
+	ActivityTotalHrs   int    `json:"activity_total_hrs"`
+	PracticalTotalHrs  int    `json:"practical_total_hrs"`
+	TotalHrs           int    `json:"total_hrs"`
 	CIAMarks           int    `json:"cia_marks"`
 	SEEMarks           int    `json:"see_marks"`
 	TotalMarks         int    `json:"total_marks"`
@@ -54,10 +62,10 @@ type CourseWithDetails struct {
 }
 
 type HonourCard struct {
-	ID             int    `json:"id"`
-	RegulationID   int    `json:"regulation_id"`
-	Title          string `json:"title"`
-	SemesterNumber int    `json:"semester_number"`
+	ID           int    `json:"id"`
+	CurriculumID int    `json:"curriculum_id"`
+	Title        string `json:"title"`
+	Number       *int   `json:"number,omitempty"`
 }
 
 type HonourVertical struct {
@@ -74,11 +82,11 @@ type HonourVerticalWithCourses struct {
 }
 
 type HonourCardWithVerticals struct {
-	ID             int                         `json:"id"`
-	RegulationID   int                         `json:"regulation_id"`
-	Title          string                      `json:"title"`
-	SemesterNumber int                         `json:"semester_number"`
-	Verticals      []HonourVerticalWithCourses `json:"verticals"`
+	ID           int                         `json:"id"`
+	CurriculumID int                         `json:"curriculum_id"`
+	Title        string                      `json:"title"`
+	Number       *int                        `json:"number,omitempty"`
+	Verticals    []HonourVerticalWithCourses `json:"verticals"`
 }
 
 // Curriculum model with template support

@@ -25,7 +25,7 @@ function CurriculumPage() {
   const fetchSemesters = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/semesters`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/semesters`)
       if (!response.ok) {
         throw new Error('Failed to fetch semesters')
       }
@@ -42,7 +42,7 @@ function CurriculumPage() {
 
   const fetchHonourCards = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/honour-cards`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/honour-cards`)
       if (!response.ok) {
         throw new Error('Failed to fetch honour cards')
       }
@@ -57,7 +57,7 @@ function CurriculumPage() {
     e.preventDefault()
     
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/semester`, {
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/semester`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ function CurriculumPage() {
     e.preventDefault()
     
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/honour-card`, {
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/honour-card`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +132,7 @@ function CurriculumPage() {
         <div className="flex justify-between items-center mb-6 bg-white/95 backdrop-blur-md px-8 py-6 rounded-2xl shadow-xl">
           <div>
             <button
-              onClick={() => navigate('/regulations')}
+              onClick={() => navigate('/curriculum')}
               className="text-indigo-600 hover:text-indigo-800 font-medium mb-2 flex items-center gap-2"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -141,7 +141,7 @@ function CurriculumPage() {
               Back to Curriculum
             </button>
             <h1 className="text-3xl font-bold text-gray-800">Manage Curriculum</h1>
-            <p className="text-gray-600 mt-1">Regulation ID: {id}</p>
+            <p className="text-gray-600 mt-1">Curriculum ID: {id}</p>
           </div>
           <div className="flex items-center gap-3 relative">
             {/* Info Icon with Tooltip */}
@@ -322,7 +322,7 @@ function CurriculumPage() {
               return (
                 <div
                   key={`sem-${sem.id}`}
-                  onClick={() => navigate(`/regulation/${id}/curriculum/semester/${sem.id}`)}
+                  onClick={() => navigate(`/curriculum/${id}/curriculum/semester/${sem.id}`)}
                   className="group bg-white/95 backdrop-blur-md rounded-xl shadow-md hover:shadow-xl p-6 transition-all duration-300 hover:-translate-y-1 cursor-pointer border border-white/50 hover:border-indigo-300"
                 >
                   <div className="text-center">
@@ -350,7 +350,7 @@ function CurriculumPage() {
             {honourCards.map(card => (
               <div
                 key={`honour-${card.id}`}
-                onClick={() => navigate(`/regulation/${id}/curriculum/honour/${card.id}`)}
+                onClick={() => navigate(`/curriculum/${id}/curriculum/honour/${card.id}`)}
                 className="group bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-md hover:shadow-xl p-6 transition-all duration-300 hover:-translate-y-1 cursor-pointer border border-purple-200 hover:border-purple-400"
               >
                 <div className="text-center">

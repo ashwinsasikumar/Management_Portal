@@ -6,8 +6,8 @@ import { API_BASE_URL } from '../config'
 function ClusterManagementPage() {
   const navigate = useNavigate()
   const [clusters, setClusters] = useState([])
-  const [regulations, setRegulations] = useState([])
-  const [availableRegulations, setAvailableRegulations] = useState([])
+  const [curriculum, setCurriculum] = useState([])
+  const [availableCurriculum, setAvailableCurriculum] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -20,7 +20,7 @@ function ClusterManagementPage() {
 
   useEffect(() => {
     fetchClusters()
-    fetchRegulations()
+    fetchCurriculum()
   }, [])
 
   const fetchClusters = async () => {
@@ -41,16 +41,16 @@ function ClusterManagementPage() {
     }
   }
 
-  const fetchRegulations = async () => {
+  const fetchCurriculum = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/curriculum`)
       if (!response.ok) {
-        throw new Error('Failed to fetch regulations')
+        throw new Error('Failed to fetch curriculum')
       }
       const data = await response.json()
-      setRegulations(data || [])
+      setCurriculum(data || [])
     } catch (err) {
-      console.error('Error fetching regulations:', err)
+      console.error('Error fetching curriculum:', err)
     }
   }
 
@@ -61,10 +61,10 @@ function ClusterManagementPage() {
         throw new Error('Failed to fetch available departments')
       }
       const data = await response.json()
-      setAvailableRegulations(data || [])
+      setAvailableCurriculum(data || [])
     } catch (err) {
       console.error('Error fetching available departments:', err)
-      setAvailableRegulations([])
+      setAvailableCurriculum([])
     }
   }
 
@@ -212,9 +212,9 @@ function ClusterManagementPage() {
     if (dept && dept.name) {
       return dept.name
     }
-    // Otherwise look up by regulation_id
-    const regId = dept && dept.regulation_id ? dept.regulation_id : dept
-    const reg = regulations.find(r => r.id === regId)
+    // Otherwise look up by curriculum_id
+    const regId = dept && dept.curriculum_id ? dept.curriculum_id : dept
+    const reg = curriculum.find(r => r.id === regId)
     return reg ? reg.name : `Department ${regId}`
   }
 
@@ -427,7 +427,7 @@ function ClusterManagementPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">{getDepartmentName(dept)}</p>
-                        <p className="text-xs text-gray-500">Regulation ID: {dept.regulation_id || dept.department_id}</p>
+                        <p className="text-xs text-gray-500">Curriculum ID: {dept.curriculum_id || dept.department_id}</p>
                       </div>
                     </div>
                     <button
@@ -474,10 +474,10 @@ function ClusterManagementPage() {
                     className="input-custom"
                   >
                     <option value="">Choose a department...</option>
-                    {availableRegulations.length === 0 ? (
+                    {availableCurriculum.length === 0 ? (
                       <option value="" disabled>No available departments</option>
                     ) : (
-                      availableRegulations.map(reg => (
+                      availableCurriculum.map(reg => (
                         <option key={reg.id} value={reg.id}>
                           {reg.name}
                         </option>

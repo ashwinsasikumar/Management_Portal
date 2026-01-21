@@ -4,7 +4,7 @@ import MainLayout from '../components/MainLayout'
 import { API_BASE_URL } from '../config'
 
 function HonourCardPage() {
-  const { id: regulationId, cardId } = useParams()
+  const { id: curriculumId, cardId } = useParams()
   const navigate = useNavigate()
   
   const [honourCard, setHonourCard] = useState(null)
@@ -21,13 +21,13 @@ function HonourCardPage() {
     course_type: '',
     category: '',
     credit: '',
-    lecture_hours: 0,
-    theory_hours: 0,
-    practical_hours: 0,
-    activity_hours: 0,
-    tutorial_hours: 0,
+    lecture_hrs: 0,
+    tutorial_hrs: 0,
+    practical_hrs: 0,
+    activity_hrs: 0,
+    tw_sl_hrs: 0,
     cia_marks: 40,
-    see_marks: 60,
+    see_marks: 60
   })
 
   useEffect(() => {
@@ -41,7 +41,7 @@ function HonourCardPage() {
       const response = await fetch(`${API_BASE_URL}/curriculum`)
       if (!response.ok) return
       const data = await response.json()
-      const curr = data.find(c => c.id === parseInt(regulationId))
+      const curr = data.find(c => c.id === parseInt(curriculumId))
       if (curr && curr.curriculum_template) {
         setCurriculumTemplate(curr.curriculum_template)
       }
@@ -53,7 +53,7 @@ function HonourCardPage() {
   const fetchHonourCard = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE_URL}/regulation/${regulationId}/honour-cards`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${curriculumId}/honour-cards`)
       if (!response.ok) {
         throw new Error('Failed to fetch honour cards')
       }
@@ -121,23 +121,45 @@ function HonourCardPage() {
     e.preventDefault()
 
     try {
+      const lectureHrs = parseInt(newCourse.lecture_hrs) || 0
+      const tutorialHrs = parseInt(newCourse.tutorial_hrs) || 0
+      const practicalHrs = parseInt(newCourse.practical_hrs) || 0
+      const activityHrs = parseInt(newCourse.activity_hrs) || 0
+      
       const courseData = {
-        course_code: newCourse.course_code,
-        course_name: newCourse.course_name,
-        course_type: newCourse.course_type,
-        category: newCourse.category,
+        ...newCourse,
         credit: parseInt(newCourse.credit),
-        lecture_hours: parseInt(newCourse.lecture_hours) || 0,
-        theory_hours: parseInt(newCourse.theory_hours) || 0,
-        practical_hours: parseInt(newCourse.practical_hours) || 0,
-        tutorial_hours: parseInt(newCourse.tutorial_hours) || 0,
+        lecture_hrs: lectureHrs,
+        tutorial_hrs: tutorialHrs,
+        practical_hrs: practicalHrs,
+        activity_hrs: activityHrs,
+        tw_sl_hrs: parseInt(newCourse.tw_sl_hrs) || 0,
         cia_marks: parseInt(newCourse.cia_marks) || 40,
-        see_marks: parseInt(newCourse.see_marks) || 60,
+        see_marks: parseInt(newCourse.see_marks) || 60
       }
       
-      // Only include activity_hours for 2026 curriculum
-      if (curriculumTemplate !== '2022') {
-        courseData.activity_hours = parseInt(newCourse.activity_hours) || 0
+      // Calculate total hours based on course type
+      if (newCourse.course_type === 'Lab') {
+        courseData.theory_total_hrs = 0
+        courseData.tutorial_total_hrs = 0
+        courseData.activity_total_hrs = 0
+        courseData.practical_total_hrs = practicalHrs * 15
+      } else if (newCourse.course_type === 'Theory') {
+        courseData.theory_total_hrs = lectureHrs * 15
+        courseData.tutorial_total_hrs = tutorialHrs * 15
+        courseData.activity_total_hrs = activityHrs * 15
+        courseData.practical_total_hrs = 0
+      } else if (newCourse.course_type === 'Theory&Lab') {
+        courseData.theory_total_hrs = lectureHrs * 15
+        courseData.tutorial_total_hrs = tutorialHrs * 15
+        courseData.practical_total_hrs = practicalHrs * 15
+        courseData.activity_total_hrs = 0
+      } else {
+        // Default: calculate all
+        courseData.theory_total_hrs = lectureHrs * 15
+        courseData.tutorial_total_hrs = tutorialHrs * 15
+        courseData.practical_total_hrs = practicalHrs * 15
+        courseData.activity_total_hrs = activityHrs * 15
       }
       
       const response = await fetch(`${API_BASE_URL}/honour-vertical/${verticalId}/course`, {
@@ -160,13 +182,13 @@ function HonourCardPage() {
         course_type: '',
         category: '',
         credit: '',
-        lecture_hours: 0,
-        theory_hours: 0,
-        practical_hours: 0,
-        activity_hours: 0,
-        tutorial_hours: 0,
+        lecture_hrs: 0,
+        tutorial_hrs: 0,
+        practical_hrs: 0,
+        activity_hrs: 0,
+        tw_sl_hrs: 0,
         cia_marks: 40,
-        see_marks: 60,
+        see_marks: 60
       })
       setShowAddCourse(null)
       fetchHonourCard()
@@ -222,7 +244,7 @@ function HonourCardPage() {
             <h2 className="text-xl font-bold text-gray-900 mb-2">Honour Card Not Found</h2>
             <p className="text-gray-600 mb-6">The honour card you're looking for doesn't exist.</p>
             <button
-              onClick={() => navigate(`/regulation/${regulationId}/curriculum`)}
+              onClick={() => navigate(`/curriculum/${curriculumId}/curriculum`)}
               className="btn-primary-custom"
             >
               Back to Curriculum
@@ -240,7 +262,7 @@ function HonourCardPage() {
       actions={
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigate(`/regulation/${regulationId}/curriculum`)}
+            onClick={() => navigate(`/curriculum/${curriculumId}/curriculum`)}
             className="btn-secondary-custom flex items-center space-x-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -440,7 +462,8 @@ function HonourCardPage() {
                         >
                           <option value="">Select Type</option>
                           <option value="Theory">Theory</option>
-                          <option value="Experiment">Experiment</option>
+                          <option value="Lab">Lab</option>
+                          <option value="Theory&Lab">Theory&Lab</option>
                         </select>
                       </div>
 
@@ -479,8 +502,8 @@ function HonourCardPage() {
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Lecture (hrs per week) *</label>
                         <input
                           type="number"
-                          value={newCourse.lecture_hours}
-                          onChange={(e) => setNewCourse({ ...newCourse, lecture_hours: e.target.value })}
+                          value={newCourse.lecture_hrs}
+                          onChange={(e) => setNewCourse({ ...newCourse, lecture_hrs: e.target.value })}
                           placeholder="0"
                           required
                           min="0"
@@ -489,36 +512,38 @@ function HonourCardPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Theory (hrs per week)</label>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Tutorial (hrs per week)</label>
                         <input
                           type="number"
-                          value={newCourse.theory_hours}
-                          onChange={(e) => setNewCourse({ ...newCourse, theory_hours: e.target.value })}
+                          value={newCourse.tutorial_hrs}
+                          onChange={(e) => setNewCourse({ ...newCourse, tutorial_hrs: e.target.value })}
                           placeholder="0"
                           min="0"
                           className="input-custom"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Practical (hrs per week)</label>
-                        <input
-                          type="number"
-                          value={newCourse.practical_hours}
-                          onChange={(e) => setNewCourse({ ...newCourse, practical_hours: e.target.value })}
-                          placeholder="0"
-                          min="0"
-                          className="input-custom"
-                        />
-                      </div>
+                      {newCourse.course_type !== 'Theory' && (
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Practical (hrs per week)</label>
+                          <input
+                            type="number"
+                            value={newCourse.practical_hrs}
+                            onChange={(e) => setNewCourse({ ...newCourse, practical_hrs: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+                      )}
 
                       {curriculumTemplate !== '2022' && (
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Activity (hrs per week)</label>
                           <input
                             type="number"
-                            value={newCourse.activity_hours}
-                            onChange={(e) => setNewCourse({ ...newCourse, activity_hours: e.target.value })}
+                            value={newCourse.activity_hrs}
+                            onChange={(e) => setNewCourse({ ...newCourse, activity_hrs: e.target.value })}
                             placeholder="0"
                             min="0"
                             className="input-custom"
@@ -563,6 +588,241 @@ function HonourCardPage() {
                           className="input-custom bg-gray-100 cursor-not-allowed"
                         />
                       </div>
+
+                      {/* Course Type Specific Fields - Total Hours for whole semester */}
+                      {newCourse.course_type === 'Theory' && (
+                        <>
+                          <div className="md:col-span-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-3 mt-4 pt-4 border-t border-gray-200">Total Hours (for whole semester)</h3>
+                          </div>
+                          
+                          {curriculumTemplate === '2026' ? (
+                            <>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">ACTIVITY HOURS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.activity_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15) + ((parseInt(newCourse.activity_hrs) || 0) * 15)}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15)}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {newCourse.course_type === 'Theory&Lab' && (
+                        <>
+                          <div className="md:col-span-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-3 mt-4 pt-4 border-t border-gray-200">Total Hours (for whole semester)</h3>
+                          </div>
+                          
+                          {curriculumTemplate === '2026' ? (
+                            <>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15) + ((parseInt(newCourse.practical_hrs) || 0) * 15)}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15) + ((parseInt(newCourse.practical_hrs) || 0) * 15)}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {newCourse.course_type === 'Lab' && (
+                        <>
+                          <div className="md:col-span-2">
+                            <h3 className="text-sm font-bold text-gray-900 mb-3 mt-4 pt-4 border-t border-gray-200">Total Hours (for whole semester)</h3>
+                          </div>
+                          
+                          {curriculumTemplate === '2026' ? (
+                            <>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TW/SL HRS</label>
+                                <input
+                                  type="number"
+                                  value={newCourse.tw_sl_hrs}
+                                  onChange={(e) => setNewCourse({ ...newCourse, tw_sl_hrs: e.target.value })}
+                                  placeholder="0"
+                                  min="0"
+                                  className="input-custom"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={((parseInt(newCourse.practical_hrs) || 0) * 15) + (parseInt(newCourse.tw_sl_hrs) || 0)}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                                <input
+                                  type="number"
+                                  value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                                  readOnly
+                                  className="input-custom bg-gray-100 cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
 
                       <div className="md:col-span-2 flex justify-end gap-3 mt-2">
                         <button

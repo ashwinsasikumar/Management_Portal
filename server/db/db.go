@@ -189,12 +189,12 @@ func CreateCurriculumCoursesTable() error {
 	query := `
 	CREATE TABLE IF NOT EXISTS curriculum_courses (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		regulation_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		semester_id INT NOT NULL,
 		course_id INT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE,
-		UNIQUE KEY unique_course_semester (regulation_id, semester_id, course_id)
+		UNIQUE KEY unique_course_semester (curriculum_id, semester_id, course_id)
 	) ENGINE=InnoDB
 	`
 
@@ -287,91 +287,91 @@ func CreateClusterTables() error {
 
 // CreateDepartmentOverviewTables creates department overview and related tables
 func CreateDepartmentOverviewTables() error {
-	// Main department_overview table
+	// Main curriculum_vision table
 	overviewQuery := `
-	CREATE TABLE IF NOT EXISTS department_overview (
+	CREATE TABLE IF NOT EXISTS curriculum_vision (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		regulation_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		vision TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE KEY unique_regulation (regulation_id)
+		UNIQUE KEY unique_regulation (curriculum_id)
 	)
 	`
 	_, err := DB.Exec(overviewQuery)
 	if err != nil {
-		log.Fatal("Failed to create department_overview table:", err)
+		log.Fatal("Failed to create curriculum_vision table:", err)
 		return err
 	}
 
 	// Mission table
 	missionQuery := `
-	CREATE TABLE IF NOT EXISTS department_mission (
+	CREATE TABLE IF NOT EXISTS curriculum_mission (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		department_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		mission_text TEXT NOT NULL,
 		visibility ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE',
 		position INT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (department_id) REFERENCES department_overview(id) ON DELETE CASCADE
+		FOREIGN KEY (curriculum_id) REFERENCES curriculum_vision(id) ON DELETE CASCADE
 	)
 	`
 	_, err = DB.Exec(missionQuery)
 	if err != nil {
-		log.Fatal("Failed to create department_mission table:", err)
+		log.Fatal("Failed to create curriculum_mission table:", err)
 		return err
 	}
 
 	// PEOs table
 	peosQuery := `
-	CREATE TABLE IF NOT EXISTS department_peos (
+	CREATE TABLE IF NOT EXISTS curriculum_peos (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		department_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		peo_text TEXT NOT NULL,
 		visibility ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE',
 		position INT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (department_id) REFERENCES department_overview(id) ON DELETE CASCADE
+		FOREIGN KEY (curriculum_id) REFERENCES curriculum_vision(id) ON DELETE CASCADE
 	)
 	`
 	_, err = DB.Exec(peosQuery)
 	if err != nil {
-		log.Fatal("Failed to create department_peos table:", err)
+		log.Fatal("Failed to create curriculum_peos table:", err)
 		return err
 	}
 
 	// POs table
 	posQuery := `
-	CREATE TABLE IF NOT EXISTS department_pos (
+	CREATE TABLE IF NOT EXISTS curriculum_pos (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		department_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		po_text TEXT NOT NULL,
 		visibility ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE',
 		position INT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (department_id) REFERENCES department_overview(id) ON DELETE CASCADE
+		FOREIGN KEY (curriculum_id) REFERENCES curriculum_vision(id) ON DELETE CASCADE
 	)
 	`
 	_, err = DB.Exec(posQuery)
 	if err != nil {
-		log.Fatal("Failed to create department_pos table:", err)
+		log.Fatal("Failed to create curriculum_pos table:", err)
 		return err
 	}
 
 	// PSOs table
 	psosQuery := `
-	CREATE TABLE IF NOT EXISTS department_psos (
+	CREATE TABLE IF NOT EXISTS curriculum_psos (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		department_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		pso_text TEXT NOT NULL,
 		visibility ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE',
 		position INT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (department_id) REFERENCES department_overview(id) ON DELETE CASCADE
+		FOREIGN KEY (curriculum_id) REFERENCES curriculum_vision(id) ON DELETE CASCADE
 	)
 	`
 	_, err = DB.Exec(psosQuery)
 	if err != nil {
-		log.Fatal("Failed to create department_psos table:", err)
+		log.Fatal("Failed to create curriculum_psos table:", err)
 		return err
 	}
 
@@ -381,7 +381,7 @@ func CreateDepartmentOverviewTables() error {
 
 // AddVisibilityColumns adds visibility ENUM column to department data tables
 func AddVisibilityColumns() error {
-	tables := []string{"department_mission", "department_peos", "department_pos", "department_psos"}
+	tables := []string{"curriculum_mission", "curriculum_peos", "curriculum_pos", "curriculum_psos"}
 
 	for _, table := range tables {
 		err := ensureColumnExists(table, "visibility", "ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE'")
@@ -457,7 +457,7 @@ func CreateNormalizedSyllabusTables() error {
 			total_hours INT NOT NULL DEFAULT 0,
 			FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE
 		)`,
-		`CREATE TABLE IF NOT EXISTS course_selflearning_main (
+		`CREATE TABLE IF NOT EXISTS course_selflearning_topics (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			course_id INT NOT NULL,
 			main_text TEXT NOT NULL,
@@ -465,13 +465,13 @@ func CreateNormalizedSyllabusTables() error {
 			UNIQUE KEY unique_course_position (course_id, position),
 			FOREIGN KEY (course_id) REFERENCES courses(course_id) ON DELETE CASCADE
 		)`,
-		`CREATE TABLE IF NOT EXISTS course_selflearning_internal (
+		`CREATE TABLE IF NOT EXISTS course_selflearning_resources (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			main_id INT NOT NULL,
 			internal_text TEXT NOT NULL,
 			position INT NOT NULL,
 			UNIQUE KEY unique_main_position (main_id, position),
-			FOREIGN KEY (main_id) REFERENCES course_selflearning_main(id) ON DELETE CASCADE
+			FOREIGN KEY (main_id) REFERENCES course_selflearning_topics(id) ON DELETE CASCADE
 		)`,
 	}
 
@@ -491,7 +491,7 @@ func CreateNormalizedSyllabusTables() error {
 func CreateSyllabusRelationalTables() error {
 	// models - references course_id directly
 	if _, err := DB.Exec(`
-		CREATE TABLE IF NOT EXISTS syllabus_models (
+		CREATE TABLE IF NOT EXISTS syllabus (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			course_id INT NOT NULL,
 			name VARCHAR(255) NOT NULL,
@@ -504,15 +504,15 @@ func CreateSyllabusRelationalTables() error {
 	}
 
 	// Drop legacy syllabus_id column if exists
-	_ = dropColumnIfExists("syllabus_models", "syllabus_id")
+	_ = dropColumnIfExists("syllabus", "syllabus_id")
 
 	// Ensure required columns exist for legacy schemas
-	_ = ensureColumnExists("syllabus_models", "course_id", "INT")
-	_ = ensureColumnExists("syllabus_models", "name", "VARCHAR(255) NOT NULL DEFAULT ''")
-	_ = ensureColumnExists("syllabus_models", "model_name", "VARCHAR(255) NOT NULL DEFAULT ''")
-	_ = ensureColumnExists("syllabus_models", "position", "INT DEFAULT 0")
+	_ = ensureColumnExists("syllabus", "course_id", "INT")
+	_ = ensureColumnExists("syllabus", "name", "VARCHAR(255) NOT NULL DEFAULT ''")
+	_ = ensureColumnExists("syllabus", "model_name", "VARCHAR(255) NOT NULL DEFAULT ''")
+	_ = ensureColumnExists("syllabus", "position", "INT DEFAULT 0")
 	// Index for filtering by course_id
-	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_models_course ON syllabus_models(course_id)")
+	_, _ = DB.Exec("CREATE INDEX IF NOT EXISTS idx_models_course ON syllabus(course_id)")
 	// titles
 	if _, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS syllabus_titles (
@@ -523,7 +523,7 @@ func CreateSyllabusRelationalTables() error {
 			hours INT DEFAULT 0,
 			position INT DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			CONSTRAINT fk_titles_model FOREIGN KEY (model_id) REFERENCES syllabus_models(id) ON DELETE CASCADE
+			CONSTRAINT fk_titles_model FOREIGN KEY (model_id) REFERENCES syllabus(id) ON DELETE CASCADE
 		) ENGINE=InnoDB`); err != nil {
 		return err
 	}
@@ -630,7 +630,7 @@ func AddSourceDepartmentColumns() error {
 	fmt.Println("Adding source_department_id columns to track shared items...")
 
 	// Add to department tables
-	tables := []string{"department_mission", "department_peos", "department_pos", "department_psos"}
+	tables := []string{"curriculum_mission", "curriculum_peos", "curriculum_pos", "curriculum_psos"}
 	for _, table := range tables {
 		if err := ensureColumnExists(table, "source_department_id", "INT DEFAULT NULL"); err != nil {
 			return fmt.Errorf("failed to add source_department_id to %s: %w", table, err)
@@ -638,13 +638,13 @@ func AddSourceDepartmentColumns() error {
 	}
 
 	// Add to normal_cards
-	if err := ensureColumnExists("normal_cards", "source_department_id", "INT DEFAULT NULL"); err != nil {
-		return fmt.Errorf("failed to add source_department_id to normal_cards: %w", err)
+	if err := ensureColumnExists("normal_cards", "source_curriculum_id", "INT DEFAULT NULL"); err != nil {
+		return fmt.Errorf("failed to add source_curriculum_id to normal_cards: %w", err)
 	}
 
-	// Add to courses (source_regulation_id to track which regulation it came from)
-	if err := ensureColumnExists("courses", "source_regulation_id", "INT DEFAULT NULL"); err != nil {
-		return fmt.Errorf("failed to add source_regulation_id to courses: %w", err)
+	// Add to courses (source_curriculum_id to track which regulation it came from)
+	if err := ensureColumnExists("courses", "source_curriculum_id", "INT DEFAULT NULL"); err != nil {
+		return fmt.Errorf("failed to add source_curriculum_id to courses: %w", err)
 	}
 
 	fmt.Println("Source tracking columns added successfully!")
@@ -658,14 +658,14 @@ func CreateSharingTrackingTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS sharing_tracking (
 			id INT AUTO_INCREMENT PRIMARY KEY,
-			source_dept_id INT NOT NULL,
-			target_dept_id INT NOT NULL,
+			source_curriculum_id INT NOT NULL,
+			target_curriculum_id INT NOT NULL,
 			item_type VARCHAR(50) NOT NULL,
 			source_item_id INT NOT NULL,
 			copied_item_id INT NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_source (source_dept_id, item_type, source_item_id),
-			INDEX idx_target (target_dept_id, item_type),
+			INDEX idx_source (source_curriculum_id, item_type, source_item_id),
+			INDEX idx_target (target_curriculum_id, item_type),
 			INDEX idx_copied (copied_item_id, item_type)
 		)
 	`
@@ -772,12 +772,12 @@ func AddRegulationRefColumns() error {
 	fmt.Println("Adding regulation reference columns (shadow links)...")
 
 	// Add to curriculum table
-	if err := ensureColumnExists("curriculum", "regulation_ref_id", "INT NULL"); err != nil {
+	if err := ensureColumnExists("curriculum", "curriculum_ref_id", "INT NULL"); err != nil {
 		return err
 	}
 
 	// Add to courses table (if needed in future)
-	if err := ensureColumnExists("courses", "regulation_ref_id", "INT NULL"); err != nil {
+	if err := ensureColumnExists("courses", "curriculum_ref_id", "INT NULL"); err != nil {
 		return err
 	}
 
@@ -793,13 +793,13 @@ func CreateHonourCardTables() error {
 	honourCardsQuery := `
 	CREATE TABLE IF NOT EXISTS honour_cards (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		regulation_id INT NOT NULL,
+		curriculum_id INT NOT NULL,
 		title VARCHAR(255) NOT NULL,
-		semester_number INT NOT NULL,
+		number INT NOT NULL,
 		visibility ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE',
-		source_department_id INT DEFAULT NULL,
+		source_curriculum_id INT DEFAULT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		INDEX idx_regulation (regulation_id)
+		INDEX idx_regulation (curriculum_id)
 	) ENGINE=InnoDB
 	`
 	_, err := DB.Exec(honourCardsQuery)
@@ -811,8 +811,8 @@ func CreateHonourCardTables() error {
 	if err := ensureColumnExists("honour_cards", "visibility", "ENUM('UNIQUE', 'CLUSTER') DEFAULT 'UNIQUE'"); err != nil {
 		return fmt.Errorf("failed to add visibility to honour_cards: %w", err)
 	}
-	if err := ensureColumnExists("honour_cards", "source_department_id", "INT DEFAULT NULL"); err != nil {
-		return fmt.Errorf("failed to add source_department_id to honour_cards: %w", err)
+	if err := ensureColumnExists("honour_cards", "source_curriculum_id", "INT DEFAULT NULL"); err != nil {
+		return fmt.Errorf("failed to add source_curriculum_id to honour_cards: %w", err)
 	}
 
 	// Create honour_verticals table

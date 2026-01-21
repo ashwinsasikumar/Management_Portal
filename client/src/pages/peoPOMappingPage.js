@@ -24,7 +24,7 @@ function PEOPOMappingPage() {
       setLoading(true)
       
       // Fetch department overview (for PEOs and POs)
-      const overviewResponse = await fetch(`${API_BASE_URL}/regulation/${id}/overview`)
+      const overviewResponse = await fetch(`${API_BASE_URL}/curriculum/${id}/overview`)
       if (!overviewResponse.ok) {
         throw new Error('Failed to fetch department overview')
       }
@@ -33,7 +33,7 @@ function PEOPOMappingPage() {
       setPos(overviewData.pos || [])
 
       // Fetch existing PEO-PO mappings
-      const mappingResponse = await fetch(`${API_BASE_URL}/regulation/${id}/peo-po-mapping`)
+      const mappingResponse = await fetch(`${API_BASE_URL}/curriculum/${id}/peo-po-mapping`)
       if (!mappingResponse.ok) {
         throw new Error('Failed to fetch PEO-PO mappings')
       }
@@ -67,7 +67,7 @@ function PEOPOMappingPage() {
         })
       })
 
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/peo-po-mapping`, {
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/peo-po-mapping`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -119,14 +119,14 @@ function PEOPOMappingPage() {
 
   if (peos.length === 0 || pos.length === 0) {
     return (
-      <MainLayout title="PEO-PO Mapping" subtitle={`Regulation ID: ${id}`}>
+      <MainLayout title="PEO-PO Mapping" subtitle={`Curriculum ID: ${id}`}>
         <div className="card-custom p-12 text-center">
           <svg className="w-20 h-20 text-yellow-400 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">PEOs or POs Not Found</h3>
           <p className="text-gray-600 mb-6">Please add Program Educational Objectives (PEOs) and Program Outcomes (POs) in the Department Overview page before creating PEO-PO mappings.</p>
-          <button onClick={() => navigate(`/regulation/${id}/overview`)} className="btn-primary-custom">Go to Department Overview</button>
+          <button onClick={() => navigate(`/curriculum/${id}/overview`)} className="btn-primary-custom">Go to Department Overview</button>
         </div>
       </MainLayout>
     )
@@ -135,7 +135,7 @@ function PEOPOMappingPage() {
   return (
     <MainLayout 
       title="PEO-PO Mapping"
-      subtitle={`Regulation ID: ${id}`}
+      subtitle={`Curriculum ID: ${id}`}
       actions={
         <div className="flex items-center space-x-3">
           <button onClick={() => navigate(-1)} className="btn-secondary-custom flex items-center space-x-2">

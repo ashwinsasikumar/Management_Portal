@@ -2,7 +2,7 @@ package models
 
 type PEOPOMapping struct {
 	ID           int `json:"id"`
-	RegulationID int `json:"regulation_id"`
+	CurriculumID int `json:"curriculum_id"`
 	PEOIndex     int `json:"peo_index"`
 	POIndex      int `json:"po_index"`
 	MappingValue int `json:"mapping_value"`

@@ -71,13 +71,13 @@ func UpdateCurriculum(w http.ResponseWriter, r *http.Request) {
 	// Prevent switching template when courses already exist
 	if oldTemplate != "" && oldTemplate != updateData.CurriculumTemplate {
 		var courseCount int
-		_ = db.DB.QueryRow("SELECT COUNT(*) FROM curriculum_courses WHERE regulation_id = ?", curriculumID).Scan(&courseCount)
+		_ = db.DB.QueryRow("SELECT COUNT(*) FROM curriculum_courses WHERE curriculum_id = ?", curriculumID).Scan(&courseCount)
 		var honourCourseCount int
 		_ = db.DB.QueryRow(`
 			SELECT COUNT(*) FROM honour_vertical_courses hvc
 			INNER JOIN honour_verticals hv ON hv.id = hvc.honour_vertical_id
 			INNER JOIN honour_cards hc ON hc.id = hv.honour_card_id
-			WHERE hc.regulation_id = ?`, curriculumID).Scan(&honourCourseCount)
+			WHERE hc.curriculum_id = ?`, curriculumID).Scan(&honourCourseCount)
 
 		if courseCount+honourCourseCount > 0 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -86,8 +86,16 @@ func UpdateCurriculum(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Handle template_config - if empty, use NULL for JSON column
+	var templateConfigValue interface{}
+	if updateData.TemplateConfig == "" {
+		templateConfigValue = nil
+	} else {
+		templateConfigValue = updateData.TemplateConfig
+	}
+
 	query := "UPDATE curriculum SET name = ?, academic_year = ?, max_credits = ?, curriculum_template = ?, template_config = ? WHERE id = ?"
-	_, err = db.DB.Exec(query, updateData.Name, updateData.AcademicYear, updateData.MaxCredits, updateData.CurriculumTemplate, updateData.TemplateConfig, curriculumID)
+	_, err = db.DB.Exec(query, updateData.Name, updateData.AcademicYear, updateData.MaxCredits, updateData.CurriculumTemplate, templateConfigValue, curriculumID)
 	if err != nil {
 		log.Println("Error updating curriculum:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -157,10 +165,11 @@ func UpdateSemester(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch old values and regulation_id for diff
+	// Fetch old values and curriculum_id for diff
 	var oldSemesterNumber int
-	var regulationID int
-	err = db.DB.QueryRow("SELECT semester_number, regulation_id FROM semesters WHERE id = ?", semesterID).Scan(&oldSemesterNumber, &regulationID)
+	var curriculumID int
+	var cardType string
+	err = db.DB.QueryRow("SELECT semester_number, curriculum_id, card_type FROM normal_cards WHERE id = ?", semesterID).Scan(&oldSemesterNumber, &curriculumID, &cardType)
 	if err != nil {
 		log.Println("Error fetching old semester data:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -168,8 +177,31 @@ func UpdateSemester(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if the new number already exists within the same card type (excluding current card)
+	if oldSemesterNumber != updateData.SemesterNumber {
+		var existingCount int
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM normal_cards WHERE curriculum_id = ? AND semester_number = ? AND id != ? AND card_type = ?",
+			curriculumID, updateData.SemesterNumber, semesterID, cardType).Scan(&existingCount)
+		if err != nil {
+			log.Println("Error checking for duplicate number:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to validate number"})
+			return
+		}
+		if existingCount > 0 {
+			if cardType == "vertical" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Vertical %d already exists in this curriculum", updateData.SemesterNumber)})
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Semester %d already exists in this curriculum", updateData.SemesterNumber)})
+			}
+			return
+		}
+	}
+
 	// Update semester
-	query := "UPDATE semesters SET semester_number = ? WHERE id = ?"
+	query := "UPDATE normal_cards SET semester_number = ? WHERE id = ?"
 	_, err = db.DB.Exec(query, updateData.SemesterNumber, semesterID)
 	if err != nil {
 		log.Println("Error updating semester:", err)
@@ -183,7 +215,7 @@ func UpdateSemester(w http.ResponseWriter, r *http.Request) {
 		diff := map[string]map[string]interface{}{
 			"semester_number": {"old": oldSemesterNumber, "new": updateData.SemesterNumber},
 		}
-		LogCurriculumActivityWithDiff(regulationID, "Semester Updated",
+		LogCurriculumActivityWithDiff(curriculumID, "Semester Updated",
 			fmt.Sprintf("Updated Semester %d to Semester %d", oldSemesterNumber, updateData.SemesterNumber), "System", diff)
 	}
 
@@ -222,10 +254,10 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 	// Fetch old course data for diff
 	var oldCourse models.Course
 	err = db.DB.QueryRow(`SELECT course_code, course_name, course_type, category, credit, 
-		theory_hours, activity_hours, lecture_hours, tutorial_hours, practical_hours, cia_marks, see_marks 
+		lecture_hrs, tutorial_hrs, practical_hrs, activity_hrs, COALESCE(`+"`tw/sl`"+`, 0) as tw_sl, cia_marks, see_marks 
 		FROM courses WHERE course_id = ?`, courseID).Scan(
 		&oldCourse.CourseCode, &oldCourse.CourseName, &oldCourse.CourseType, &oldCourse.Category,
-		&oldCourse.Credit, &oldCourse.TheoryHours, &oldCourse.ActivityHours, &oldCourse.LectureHours, &oldCourse.TutorialHours, &oldCourse.PracticalHours,
+		&oldCourse.Credit, &oldCourse.LectureHrs, &oldCourse.TutorialHrs, &oldCourse.PracticalHrs, &oldCourse.ActivityHrs, &oldCourse.TwSlHrs,
 		&oldCourse.CIAMarks, &oldCourse.SEEMarks)
 	if err != nil {
 		log.Println("Error fetching old course data:", err)
@@ -234,24 +266,73 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get regulation_id from curriculum_courses
-	var regulationID int
-	err = db.DB.QueryRow("SELECT regulation_id FROM curriculum_courses WHERE course_id = ? LIMIT 1", courseID).Scan(&regulationID)
+	// Get curriculum_id from curriculum_courses
+	var curriculumID int
+	err = db.DB.QueryRow("SELECT curriculum_id FROM curriculum_courses WHERE course_id = ? LIMIT 1", courseID).Scan(&curriculumID)
 	if err != nil && err != sql.ErrNoRows {
-		log.Println("Error fetching regulation_id:", err)
+		log.Println("Error fetching curriculum_id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch curriculum ID"})
 		return
 	}
 
-	// Update course (do not set generated column total_marks)
+	// Get curriculum template
+	var curriculumTemplate string
+	if curriculumID > 0 {
+		err = db.DB.QueryRow("SELECT curriculum_template FROM curriculum WHERE id = ?", curriculumID).Scan(&curriculumTemplate)
+		if err != nil {
+			log.Println("Error fetching curriculum template:", err)
+			// Don't fail, just use default calculation
+			curriculumTemplate = "2022"
+		}
+	} else {
+		curriculumTemplate = "2022"
+	}
+
+	// Calculate total hours based on template and course type
+	var theoryTotal, tutorialTotal, practicalTotal, activityTotal int
+	if curriculumTemplate == "2026" {
+		switch course.CourseType {
+		case "Theory":
+			theoryTotal = course.LectureHrs * 15
+			tutorialTotal = course.TutorialHrs * 15
+			activityTotal = course.ActivityHrs * 15
+			practicalTotal = 0
+		case "Lab":
+			theoryTotal = 0
+			tutorialTotal = 0
+			activityTotal = 0
+			practicalTotal = course.PracticalHrs * 15
+		case "Theory&Lab":
+			theoryTotal = course.LectureHrs * 15
+			tutorialTotal = course.TutorialHrs * 15
+			practicalTotal = course.PracticalHrs * 15
+			activityTotal = 0
+		default:
+			// Default to calculating all
+			theoryTotal = course.LectureHrs * 15
+			tutorialTotal = course.TutorialHrs * 15
+			practicalTotal = course.PracticalHrs * 15
+			activityTotal = course.ActivityHrs * 15
+		}
+	} else {
+		// For 2022 or other templates, calculate all as before
+		theoryTotal = course.LectureHrs * 15
+		tutorialTotal = course.TutorialHrs * 15
+		practicalTotal = course.PracticalHrs * 15
+		activityTotal = course.ActivityHrs * 15
+	}
+
+	// Update course - calculate total hours (total_hrs and total_marks are GENERATED columns)
 	course.TotalMarks = course.CIAMarks + course.SEEMarks
 	query := `UPDATE courses SET course_code = ?, course_name = ?, course_type = ?, category = ?, 
-		credit = ?, theory_hours = ?, activity_hours = ?, lecture_hours = ?, tutorial_hours = ?, practical_hours = ?, 
+		credit = ?, lecture_hrs = ?, tutorial_hrs = ?, practical_hrs = ?, activity_hrs = ?, ` + "`tw/sl`" + ` = ?,
+		theory_total_hrs = ?, tutorial_total_hrs = ?, practical_total_hrs = ?, activity_total_hrs = ?,
 		cia_marks = ?, see_marks = ? WHERE course_id = ?`
 
 	_, err = db.DB.Exec(query, course.CourseCode, course.CourseName, course.CourseType, course.Category,
-		course.Credit, course.TheoryHours, course.ActivityHours, course.LectureHours, course.TutorialHours, course.PracticalHours,
+		course.Credit, course.LectureHrs, course.TutorialHrs, course.PracticalHrs, course.ActivityHrs, course.TwSlHrs,
+		theoryTotal, tutorialTotal, practicalTotal, activityTotal,
 		course.CIAMarks, course.SEEMarks, courseID)
 	if err != nil {
 		log.Println("Error updating course:", err)
@@ -277,20 +358,17 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 	if oldCourse.Credit != course.Credit {
 		diff["credit"] = map[string]interface{}{"old": oldCourse.Credit, "new": course.Credit}
 	}
-	if oldCourse.TheoryHours != course.TheoryHours {
-		diff["theory_hours"] = map[string]interface{}{"old": oldCourse.TheoryHours, "new": course.TheoryHours}
+	if oldCourse.LectureHrs != course.LectureHrs {
+		diff["lecture_hrs"] = map[string]interface{}{"old": oldCourse.LectureHrs, "new": course.LectureHrs}
 	}
-	if oldCourse.ActivityHours != course.ActivityHours {
-		diff["activity_hours"] = map[string]interface{}{"old": oldCourse.ActivityHours, "new": course.ActivityHours}
+	if oldCourse.TutorialHrs != course.TutorialHrs {
+		diff["tutorial_hrs"] = map[string]interface{}{"old": oldCourse.TutorialHrs, "new": course.TutorialHrs}
 	}
-	if oldCourse.LectureHours != course.LectureHours {
-		diff["lecture_hours"] = map[string]interface{}{"old": oldCourse.LectureHours, "new": course.LectureHours}
+	if oldCourse.PracticalHrs != course.PracticalHrs {
+		diff["practical_hrs"] = map[string]interface{}{"old": oldCourse.PracticalHrs, "new": course.PracticalHrs}
 	}
-	if oldCourse.TutorialHours != course.TutorialHours {
-		diff["tutorial_hours"] = map[string]interface{}{"old": oldCourse.TutorialHours, "new": course.TutorialHours}
-	}
-	if oldCourse.PracticalHours != course.PracticalHours {
-		diff["practical_hours"] = map[string]interface{}{"old": oldCourse.PracticalHours, "new": course.PracticalHours}
+	if oldCourse.ActivityHrs != course.ActivityHrs {
+		diff["activity_hrs"] = map[string]interface{}{"old": oldCourse.ActivityHrs, "new": course.ActivityHrs}
 	}
 	if oldCourse.CIAMarks != course.CIAMarks {
 		diff["cia_marks"] = map[string]interface{}{"old": oldCourse.CIAMarks, "new": course.CIAMarks}
@@ -299,8 +377,8 @@ func UpdateCourse(w http.ResponseWriter, r *http.Request) {
 		diff["see_marks"] = map[string]interface{}{"old": oldCourse.SEEMarks, "new": course.SEEMarks}
 	}
 
-	if len(diff) > 0 && regulationID > 0 {
-		LogCurriculumActivityWithDiff(regulationID, "Course Updated",
+	if len(diff) > 0 && curriculumID > 0 {
+		LogCurriculumActivityWithDiff(curriculumID, "Course Updated",
 			fmt.Sprintf("Updated course: %s - %s", course.CourseCode, course.CourseName), "System", diff)
 	}
 
@@ -324,12 +402,12 @@ func GetCourse(w http.ResponseWriter, r *http.Request) {
 	var course models.Course
 	err = db.DB.QueryRow(`
 		SELECT course_id, course_code, course_name, course_type, category, credit, 
-		       lecture_hours, tutorial_hours, practical_hours, cia_marks, see_marks, total_marks
+		       lecture_hrs, tutorial_hrs, practical_hrs, COALESCE(`+"`tw/sl`"+`, 0) as tw_sl, cia_marks, see_marks, total_marks
 		FROM courses 
 		WHERE course_id = ?`, courseID).
 		Scan(&course.CourseID, &course.CourseCode, &course.CourseName, &course.CourseType,
-			&course.Category, &course.Credit, &course.LectureHours, &course.TutorialHours,
-			&course.PracticalHours, &course.CIAMarks, &course.SEEMarks, &course.TotalMarks)
+			&course.Category, &course.Credit, &course.LectureHrs, &course.TutorialHrs,
+			&course.PracticalHrs, &course.TwSlHrs, &course.CIAMarks, &course.SEEMarks, &course.TotalMarks)
 
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)

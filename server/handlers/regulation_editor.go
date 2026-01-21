@@ -156,7 +156,7 @@ func UpdateSection(w http.ResponseWriter, r *http.Request) {
 	var status string
 	err := db.DB.QueryRow(`
 		SELECT r.status FROM regulations r 
-		JOIN regulation_sections s ON r.id = s.regulation_id 
+		JOIN regulation_sections s ON r.id = s.curriculum_id 
 		WHERE s.id = ?
 	`, sectionID).Scan(&status)
 	if err != nil {
@@ -199,7 +199,7 @@ func DeleteSection(w http.ResponseWriter, r *http.Request) {
 	var status string
 	err := db.DB.QueryRow(`
 		SELECT r.status FROM regulations r 
-		JOIN regulation_sections s ON r.id = s.regulation_id 
+		JOIN regulation_sections s ON r.id = s.curriculum_id 
 		WHERE s.id = ?
 	`, sectionID).Scan(&status)
 	if err != nil {
@@ -240,7 +240,7 @@ func CreateClause(w http.ResponseWriter, r *http.Request) {
 	var regulationID int
 	err := db.DB.QueryRow(`
 		SELECT r.id, r.status FROM regulations r 
-		JOIN regulation_sections s ON r.id = s.regulation_id 
+		JOIN regulation_sections s ON r.id = s.curriculum_id 
 		WHERE s.id = ?
 	`, sectionID).Scan(&regulationID, &status)
 	if err != nil {

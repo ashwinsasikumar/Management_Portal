@@ -16,7 +16,7 @@ func GetRegulations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	query := "SELECT id, name, academic_year, max_credits, curriculum_template, template_config, created_at FROM curriculum ORDER BY created_at DESC"
+	query := "SELECT id, name, academic_year, max_credits, curriculum_template, template_config, created_at FROM curriculum WHERE status = 1 ORDER BY created_at DESC"
 	rows, err := db.DB.Query(query)
 	if err != nil {
 		log.Println("Error querying curriculum:", err)
@@ -121,7 +121,7 @@ func DeleteRegulation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "DELETE FROM curriculum WHERE id = ?"
+	query := "UPDATE curriculum SET status = 0 WHERE id = ? AND status = 1"
 	result, err := db.DB.Exec(query, id)
 	if err != nil {
 		log.Println("Error deleting curriculum:", err)

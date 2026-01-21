@@ -38,7 +38,7 @@ func GetCourseSyllabusNested(w http.ResponseWriter, r *http.Request) {
 	// 2. Get models linked via course_id directly
 	modelRows, err := db.DB.Query(`
 		SELECT id, course_id, model_name, position 
-		FROM syllabus_models 
+		FROM syllabus 
 		WHERE course_id = ? 
 		ORDER BY position, id`, courseID)
 
@@ -184,7 +184,7 @@ func CreateModel(w http.ResponseWriter, r *http.Request) {
 
 	// Insert model with course_id directly (course-centric design)
 	result, err := db.DB.Exec(`
-		INSERT INTO syllabus_models (course_id, model_name, name, position) 
+		INSERT INTO syllabus (course_id, model_name, name, position) 
 		VALUES (?, ?, ?, ?)`, courseID, body.ModelName, body.ModelName, body.Position)
 
 	if err != nil {
@@ -216,7 +216,7 @@ func UpdateModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = db.DB.Exec(`
-		UPDATE syllabus_models 
+		UPDATE syllabus 
 		SET model_name = ?, name = ?, position = ? 
 		WHERE id = ?`, body.ModelName, body.ModelName, body.Position, modelID)
 
@@ -238,7 +238,7 @@ func DeleteModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.DB.Exec("DELETE FROM syllabus_models WHERE id = ?", modelID)
+	_, err = db.DB.Exec("DELETE FROM syllabus WHERE id = ?", modelID)
 	if err != nil {
 		log.Println("DeleteModel error:", err)
 		http.Error(w, "Failed to delete model", http.StatusInternalServerError)

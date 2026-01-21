@@ -2,7 +2,7 @@ package models
 
 type DepartmentOverview struct {
 	ID           int                  `json:"id"`
-	RegulationID int                  `json:"regulation_id"`
+	CurriculumID int                  `json:"curriculum_id"`
 	Vision       string               `json:"vision"`
 	Mission      []DepartmentListItem `json:"mission"`
 	PEOs         []DepartmentListItem `json:"peos"`

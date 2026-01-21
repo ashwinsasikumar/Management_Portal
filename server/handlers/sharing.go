@@ -26,12 +26,12 @@ func GetDepartmentSharingInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get or create department_overview entry
+	// Get or create curriculum_vision entry
 	var deptOverviewID int
-	err = db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptOverviewID)
+	err = db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptOverviewID)
 	if err == sql.ErrNoRows {
 		// Create if doesn't exist
-		result, err := db.DB.Exec("INSERT INTO department_overview (regulation_id, vision) VALUES (?, '')", regulationID)
+		result, err := db.DB.Exec("INSERT INTO curriculum_vision (curriculum_id, vision) VALUES (?, '')", regulationID)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create department overview"})
@@ -62,7 +62,7 @@ func GetDepartmentSharingInfo(w http.ResponseWriter, r *http.Request) {
 	// Get all items with their visibility
 	response := map[string]interface{}{
 		"department_id":       deptOverviewID,
-		"regulation_id":       regulationID,
+		"curriculum_id":       regulationID,
 		"curriculum_template": curriculumTemplate,
 		"in_cluster":          clusterID.Valid,
 	}
@@ -76,11 +76,11 @@ func GetDepartmentSharingInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch mission items
-	response["mission"] = fetchItemsWithVisibility(deptOverviewID, "department_mission", "mission_text")
+	response["mission"] = fetchItemsWithVisibility(deptOverviewID, "curriculum_mission", "mission_text")
 	// Fetch PEOs
-	response["peos"] = fetchItemsWithVisibility(deptOverviewID, "department_peos", "peo_text")
+	response["peos"] = fetchItemsWithVisibility(deptOverviewID, "curriculum_peos", "peo_text")
 	// Fetch PSOs
-	response["psos"] = fetchItemsWithVisibility(deptOverviewID, "department_psos", "pso_text")
+	response["psos"] = fetchItemsWithVisibility(deptOverviewID, "curriculum_psos", "pso_text")
 
 	// Fetch normal cards (semesters, verticals, electives, etc.) with visibility
 	response["normal_cards"] = fetchSemestersWithVisibility(regulationID)
@@ -94,7 +94,7 @@ func GetDepartmentSharingInfo(w http.ResponseWriter, r *http.Request) {
 // fetchSemestersWithVisibility fetches normal_cards (semesters, verticals, electives, etc.) with their visibility status and courses
 func fetchSemestersWithVisibility(regulationID int) []map[string]interface{} {
 	query := `SELECT id, semester_number, COALESCE(card_type, 'semester') as card_type, COALESCE(visibility, 'UNIQUE') as visibility, source_department_id 
-		FROM normal_cards WHERE regulation_id = ? 
+		FROM normal_cards WHERE curriculum_id = ? 
 		ORDER BY 
 			CASE card_type 
 				WHEN 'semester' THEN 1 
@@ -114,7 +114,7 @@ func fetchSemestersWithVisibility(regulationID int) []map[string]interface{} {
 
 	// Get department ID for this regulation
 	var deptID int
-	db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptID)
+	db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptID)
 
 	cards := []map[string]interface{}{}
 	for rows.Next() {
@@ -145,7 +145,7 @@ func fetchSemestersWithVisibility(regulationID int) []map[string]interface{} {
 
 // fetchHonourCardsWithVisibility fetches honour cards with their visibility status
 func fetchHonourCardsWithVisibility(regulationID int) []map[string]interface{} {
-	query := "SELECT id, title, semester_number, COALESCE(visibility, 'UNIQUE') as visibility, source_department_id FROM honour_cards WHERE regulation_id = ? ORDER BY semester_number"
+	query := "SELECT id, title, COALESCE(visibility, 'UNIQUE') as visibility, source_curriculum_id FROM honour_cards WHERE curriculum_id = ? ORDER BY id"
 	rows, err := db.DB.Query(query, regulationID)
 	if err != nil {
 		log.Println("Error fetching honour cards:", err)
@@ -155,20 +155,19 @@ func fetchHonourCardsWithVisibility(regulationID int) []map[string]interface{} {
 
 	// Get department ID for this regulation
 	var deptID int
-	db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptID)
+	db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptID)
 
 	honourCards := []map[string]interface{}{}
 	for rows.Next() {
-		var id, semNum int
+		var id int
 		var title, visibility string
 		var sourceDeptID sql.NullInt64
-		if err := rows.Scan(&id, &title, &semNum, &visibility, &sourceDeptID); err == nil {
+		if err := rows.Scan(&id, &title, &visibility, &sourceDeptID); err == nil {
 			card := map[string]interface{}{
-				"id":              id,
-				"title":           title,
-				"semester_number": semNum,
-				"visibility":      visibility,
-				"is_owner":        !sourceDeptID.Valid || sourceDeptID.Int64 == int64(deptID),
+				"id":         id,
+				"title":      title,
+				"visibility": visibility,
+				"is_owner":   !sourceDeptID.Valid || sourceDeptID.Int64 == int64(deptID),
 			}
 			if sourceDeptID.Valid && sourceDeptID.Int64 != int64(deptID) {
 				card["source_department_id"] = sourceDeptID.Int64
@@ -187,7 +186,7 @@ func fetchCoursesForSemester(regulationID, semesterID int) []map[string]interfac
 		SELECT c.course_id, c.course_code, c.course_name, COALESCE(c.visibility, 'UNIQUE') as visibility
 		FROM courses c
 		JOIN curriculum_courses cc ON c.course_id = cc.course_id
-		WHERE cc.regulation_id = ? AND cc.semester_id = ?
+		WHERE cc.curriculum_id = ? AND cc.semester_id = ?
 		ORDER BY c.course_code
 	`
 	rows, err := db.DB.Query(query, regulationID, semesterID)
@@ -200,8 +199,8 @@ func fetchCoursesForSemester(regulationID, semesterID int) []map[string]interfac
 	// Check if the semester is owned by this department
 	var semesterSourceDeptID sql.NullInt64
 	var deptID int
-	db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptID)
-	db.DB.QueryRow("SELECT source_department_id FROM normal_cards WHERE id = ?", semesterID).Scan(&semesterSourceDeptID)
+	db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptID)
+	db.DB.QueryRow("SELECT source_curriculum_id FROM normal_cards WHERE id = ?", semesterID).Scan(&semesterSourceDeptID)
 
 	semesterIsOwned := !semesterSourceDeptID.Valid || semesterSourceDeptID.Int64 == int64(deptID)
 
@@ -256,10 +255,10 @@ func fetchItemsWithVisibility(deptID int, tableName, columnName string) []map[st
 // fetchClusterDepartments gets all departments in a cluster except the current one
 func fetchClusterDepartments(clusterID, currentDeptID int) []map[string]interface{} {
 	query := `
-		SELECT cd.department_id, do.regulation_id, c.name, COALESCE(c.curriculum_template, '2026') as curriculum_template
+		SELECT cd.department_id, do.curriculum_id, c.name, COALESCE(c.curriculum_template, '2026') as curriculum_template
 		FROM cluster_departments cd
-		JOIN department_overview do ON cd.department_id = do.id
-		JOIN curriculum c ON do.regulation_id = c.id
+		JOIN curriculum_vision do ON cd.department_id = do.id
+		JOIN curriculum c ON do.curriculum_id = c.id
 		WHERE cd.cluster_id = ? AND cd.department_id != ?
 	`
 	rows, err := db.DB.Query(query, clusterID, currentDeptID)
@@ -275,7 +274,7 @@ func fetchClusterDepartments(clusterID, currentDeptID int) []map[string]interfac
 		if err := rows.Scan(&deptID, &regID, &name, &curriculumTemplate); err == nil {
 			depts = append(depts, map[string]interface{}{
 				"department_id":       deptID,
-				"regulation_id":       regID,
+				"curriculum_id":       regID,
 				"name":                name,
 				"curriculum_template": curriculumTemplate,
 			})
@@ -370,9 +369,9 @@ func UpdateItemVisibility(w http.ResponseWriter, r *http.Request) {
 		Table  string
 		Column string
 	}{
-		"mission": {"department_mission", "mission_text"},
-		"peos":    {"department_peos", "peo_text"},
-		"psos":    {"department_psos", "pso_text"},
+		"mission": {"curriculum_mission", "mission_text"},
+		"peos":    {"curriculum_peos", "peo_text"},
+		"psos":    {"curriculum_psos", "pso_text"},
 	}
 
 	tableInfo, ok := tableMap[reqData.ItemType]
@@ -495,11 +494,11 @@ func shareItemToCluster(sourceDeptID, itemID int, tableName, columnName string, 
 	// Determine item type based on table name
 	itemType := ""
 	switch tableName {
-	case "department_mission":
+	case "curriculum_mission":
 		itemType = "mission"
-	case "department_peos":
+	case "curriculum_peos":
 		itemType = "peos"
-	case "department_psos":
+	case "curriculum_psos":
 		itemType = "psos"
 	}
 
@@ -525,7 +524,7 @@ func shareItemToCluster(sourceDeptID, itemID int, tableName, columnName string, 
 		if err == nil {
 			// Already exists, update tracking table
 			_, _ = db.DB.Exec(`
-				INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+				INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 				VALUES (?, ?, ?, ?, ?)
 				ON DUPLICATE KEY UPDATE copied_item_id = VALUES(copied_item_id)
 			`, sourceDeptID, targetDeptID, itemType, itemID, existsID)
@@ -544,7 +543,7 @@ func shareItemToCluster(sourceDeptID, itemID int, tableName, columnName string, 
 
 		// Record in tracking table
 		_, err = db.DB.Exec(`
-			INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+			INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 			VALUES (?, ?, ?, ?, ?)
 		`, sourceDeptID, targetDeptID, itemType, itemID, copiedItemID)
 		if err != nil {
@@ -560,19 +559,19 @@ func unshareItemFromCluster(sourceDeptID, itemID int, tableName string) error {
 	// Determine item type based on table name
 	itemType := ""
 	switch tableName {
-	case "department_mission":
+	case "curriculum_mission":
 		itemType = "mission"
-	case "department_peos":
+	case "curriculum_peos":
 		itemType = "peos"
-	case "department_psos":
+	case "curriculum_psos":
 		itemType = "psos"
 	}
 
 	// Get all copied items from the tracking table
 	rows, err := db.DB.Query(`
-		SELECT target_dept_id, copied_item_id 
+		SELECT target_curriculum_id, copied_item_id 
 		FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = ? AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = ? AND source_item_id = ?
 	`, sourceDeptID, itemType, itemID)
 	if err != nil {
 		return err
@@ -601,7 +600,7 @@ func unshareItemFromCluster(sourceDeptID, itemID int, tableName string) error {
 	// Remove tracking records
 	_, err = db.DB.Exec(`
 		DELETE FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = ? AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = ? AND source_item_id = ?
 	`, sourceDeptID, itemType, itemID)
 	if err != nil {
 		log.Printf("Error removing tracking records: %v\n", err)
@@ -616,19 +615,19 @@ func updateSharedItemInCluster(sourceDeptID, itemID int, tableName, columnName, 
 	// Determine item type based on table name
 	itemType := ""
 	switch tableName {
-	case "department_mission":
+	case "curriculum_mission":
 		itemType = "mission"
-	case "department_peos":
+	case "curriculum_peos":
 		itemType = "peos"
-	case "department_psos":
+	case "curriculum_psos":
 		itemType = "psos"
 	}
 
 	// Get all copied items from the tracking table
 	rows, err := db.DB.Query(`
-		SELECT target_dept_id, copied_item_id 
+		SELECT target_curriculum_id, copied_item_id 
 		FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = ? AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = ? AND source_item_id = ?
 	`, sourceDeptID, itemType, itemID)
 	if err != nil {
 		return err
@@ -666,7 +665,7 @@ func updateSemesterVisibility(semesterID int, visibility string, targetDepartmen
 	var semesterNum sql.NullInt64
 	var cardType sql.NullString
 	var sourceDeptID sql.NullInt64
-	err := db.DB.QueryRow("SELECT regulation_id, semester_number, COALESCE(card_type, 'semester'), source_department_id FROM normal_cards WHERE id = ?", semesterID).Scan(&regulationID, &semesterNum, &cardType, &sourceDeptID)
+	err := db.DB.QueryRow("SELECT curriculum_id, semester_number, COALESCE(card_type, 'semester'), source_curriculum_id FROM normal_cards WHERE id = ?", semesterID).Scan(&regulationID, &semesterNum, &cardType, &sourceDeptID)
 	if err != nil {
 		return err
 	}
@@ -682,7 +681,7 @@ func updateSemesterVisibility(semesterID int, visibility string, targetDepartmen
 
 	// Get department_id from regulation
 	var deptID int
-	err = db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptID)
+	err = db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptID)
 	if err != nil {
 		return err
 	}
@@ -714,7 +713,7 @@ func updateSemesterVisibility(semesterID int, visibility string, targetDepartmen
 			var shareCount int
 			db.DB.QueryRow(`
 				SELECT COUNT(*) FROM sharing_tracking 
-				WHERE source_dept_id = ? AND source_item_id = ? AND item_type = 'semester'
+				WHERE source_curriculum_id = ? AND source_item_id = ? AND item_type = 'semester'
 			`, deptID, semesterID).Scan(&shareCount)
 
 			// If no more shares, update to UNIQUE; otherwise keep as CLUSTER
@@ -753,7 +752,7 @@ func updateSemesterVisibility(semesterID int, visibility string, targetDepartmen
 			UPDATE courses c
 			JOIN curriculum_courses cc ON c.course_id = cc.course_id
 			SET c.visibility = 'UNIQUE'
-			WHERE cc.semester_id = ? AND cc.regulation_id = ?
+			WHERE cc.semester_id = ? AND cc.curriculum_id = ?
 		`, semesterID, regulationID)
 		if err != nil {
 			log.Printf("Error updating course visibility for semester %d: %v\n", semesterID, err)
@@ -781,23 +780,23 @@ func updateCourseVisibility(courseID int, visibility string, targetDepartments [
 		return err
 	}
 
-	// Get regulation_id and semester_id from curriculum_courses
+	// Get curriculum_id and semester_id from curriculum_courses
 	var regulationID, semesterID int
-	err = db.DB.QueryRow("SELECT regulation_id, semester_id FROM curriculum_courses WHERE course_id = ? LIMIT 1", courseID).Scan(&regulationID, &semesterID)
+	err = db.DB.QueryRow("SELECT curriculum_id, semester_id FROM curriculum_courses WHERE course_id = ? LIMIT 1", courseID).Scan(&regulationID, &semesterID)
 	if err != nil {
 		return err
 	}
 
 	// Get department_id
 	var deptID int
-	err = db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptID)
+	err = db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptID)
 	if err != nil {
 		return err
 	}
 
 	// Check if the semester (and thus course) is owned by this department
 	var semesterSourceDeptID sql.NullInt64
-	err = db.DB.QueryRow("SELECT source_department_id FROM normal_cards WHERE id = ?", semesterID).Scan(&semesterSourceDeptID)
+	err = db.DB.QueryRow("SELECT source_curriculum_id FROM normal_cards WHERE id = ?", semesterID).Scan(&semesterSourceDeptID)
 	if err != nil {
 		return err
 	}
@@ -828,7 +827,7 @@ func updateCourseVisibility(courseID int, visibility string, targetDepartments [
 			var shareCount int
 			db.DB.QueryRow(`
 				SELECT COUNT(*) FROM sharing_tracking 
-				WHERE source_dept_id = ? AND source_item_id = ? AND item_type = 'course'
+				WHERE source_curriculum_id = ? AND source_item_id = ? AND item_type = 'course'
 			`, deptID, courseID).Scan(&shareCount)
 
 			// If no more shares, update to UNIQUE; otherwise keep as CLUSTER
@@ -893,20 +892,20 @@ func shareSemesterToCluster(sourceDeptID, sourceRegulationID, semesterID, semest
 			queryArgs = append(queryArgs, targetDepartments[i])
 		}
 		targetDeptQuery = fmt.Sprintf(`
-			SELECT cd.department_id, do.regulation_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
+			SELECT cd.department_id, do.curriculum_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
 			FROM cluster_departments cd
-			JOIN department_overview do ON cd.department_id = do.id
-			JOIN curriculum c ON do.regulation_id = c.id
+			JOIN curriculum_vision do ON cd.department_id = do.id
+			JOIN curriculum c ON do.curriculum_id = c.id
 			WHERE cd.cluster_id = ? AND cd.department_id != ? AND cd.department_id IN (%s)
 		`, placeholders)
 		queryArgs = append([]interface{}{clusterID.Int64, sourceDeptID}, queryArgs...)
 	} else {
 		// Share with all departments
 		targetDeptQuery = `
-			SELECT cd.department_id, do.regulation_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
+			SELECT cd.department_id, do.curriculum_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
 			FROM cluster_departments cd
-			JOIN department_overview do ON cd.department_id = do.id
-			JOIN curriculum c ON do.regulation_id = c.id
+			JOIN curriculum_vision do ON cd.department_id = do.id
+			JOIN curriculum c ON do.curriculum_id = c.id
 			WHERE cd.cluster_id = ? AND cd.department_id != ?
 		`
 		queryArgs = []interface{}{clusterID.Int64, sourceDeptID}
@@ -944,12 +943,12 @@ func shareSemesterToCluster(sourceDeptID, sourceRegulationID, semesterID, semest
 			var result sql.Result
 			if semesterNum > 0 {
 				result, err = db.DB.Exec(`
-					INSERT INTO normal_cards (regulation_id, semester_number, card_type, visibility, source_department_id)
+					INSERT INTO normal_cards (curriculum_id, semester_number, card_type, visibility, source_curriculum_id)
 					VALUES (?, ?, ?, 'CLUSTER', ?)
 				`, targetRegulationID, semesterNum, cardType, sourceDeptID)
 			} else {
 				result, err = db.DB.Exec(`
-					INSERT INTO normal_cards (regulation_id, card_type, visibility, source_department_id)
+					INSERT INTO normal_cards (curriculum_id, card_type, visibility, source_curriculum_id)
 					VALUES (?, ?, 'CLUSTER', ?)
 				`, targetRegulationID, cardType, sourceDeptID)
 			}
@@ -962,7 +961,7 @@ func shareSemesterToCluster(sourceDeptID, sourceRegulationID, semesterID, semest
 
 			// Record in tracking table
 			_, _ = db.DB.Exec(`
-				INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+				INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 				VALUES (?, ?, 'semester', ?, ?)
 			`, sourceDeptID, targetDeptID, semesterID, copiedSemID)
 
@@ -978,7 +977,7 @@ func shareSemesterToCluster(sourceDeptID, sourceRegulationID, semesterID, semest
 		} else if err == nil {
 			// Already exists, update tracking
 			_, _ = db.DB.Exec(`
-				INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+				INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 				VALUES (?, ?, 'semester', ?, ?)
 				ON DUPLICATE KEY UPDATE copied_item_id = VALUES(copied_item_id)
 			`, sourceDeptID, targetDeptID, semesterID, existingSemID)
@@ -992,9 +991,9 @@ func shareSemesterToCluster(sourceDeptID, sourceRegulationID, semesterID, semest
 func unshareSemesterFromCluster(sourceDeptID, semesterID int) error {
 	// Get all copied semesters from tracking table
 	rows, err := db.DB.Query(`
-		SELECT target_dept_id, copied_item_id 
+		SELECT target_curriculum_id, copied_item_id 
 		FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = 'semester' AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = 'semester' AND source_item_id = ?
 	`, sourceDeptID, semesterID)
 	if err != nil {
 		return err
@@ -1010,7 +1009,7 @@ func unshareSemesterFromCluster(sourceDeptID, semesterID int) error {
 
 		// Get regulation ID for the copied semester
 		var targetRegulationID int
-		db.DB.QueryRow("SELECT regulation_id FROM normal_cards WHERE id = ?", copiedSemID).Scan(&targetRegulationID)
+		db.DB.QueryRow("SELECT curriculum_id FROM normal_cards WHERE id = ?", copiedSemID).Scan(&targetRegulationID)
 
 		// Delete courses associated with this copied semester
 		db.DB.Exec(`
@@ -1019,7 +1018,7 @@ func unshareSemesterFromCluster(sourceDeptID, semesterID int) error {
 		`, targetRegulationID, copiedSemID)
 
 		// Delete the semester itself
-		_, err = db.DB.Exec("DELETE FROM normal_cards WHERE id = ? AND source_department_id = ?", copiedSemID, sourceDeptID)
+		_, err = db.DB.Exec("DELETE FROM normal_cards WHERE id = ? AND source_curriculum_id = ?", copiedSemID, sourceDeptID)
 		if err != nil {
 			log.Printf("Error removing shared semester %d: %v\n", copiedSemID, err)
 		}
@@ -1028,7 +1027,7 @@ func unshareSemesterFromCluster(sourceDeptID, semesterID int) error {
 	// Remove tracking records
 	_, err = db.DB.Exec(`
 		DELETE FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = 'semester' AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = 'semester' AND source_item_id = ?
 	`, sourceDeptID, semesterID)
 
 	return err
@@ -1100,20 +1099,20 @@ func shareCourseToCluster(sourceDeptID, sourceRegulationID, courseID int, target
 			queryArgs = append(queryArgs, targetDepartments[i])
 		}
 		targetDeptQuery = fmt.Sprintf(`
-			SELECT cd.department_id, do.regulation_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
+			SELECT cd.department_id, do.curriculum_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
 			FROM cluster_departments cd
-			JOIN department_overview do ON cd.department_id = do.id
-			JOIN curriculum c ON do.regulation_id = c.id
+			JOIN curriculum_vision do ON cd.department_id = do.id
+			JOIN curriculum c ON do.curriculum_id = c.id
 			WHERE cd.cluster_id = ? AND cd.department_id != ? AND cd.department_id IN (%s)
 		`, placeholders)
 		queryArgs = append([]interface{}{clusterID.Int64, sourceDeptID}, queryArgs...)
 	} else {
 		// Share with all departments
 		targetDeptQuery = `
-			SELECT cd.department_id, do.regulation_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
+			SELECT cd.department_id, do.curriculum_id, COALESCE(c.curriculum_template, '2026') as curriculum_template 
 			FROM cluster_departments cd
-			JOIN department_overview do ON cd.department_id = do.id
-			JOIN curriculum c ON do.regulation_id = c.id
+			JOIN curriculum_vision do ON cd.department_id = do.id
+			JOIN curriculum c ON do.curriculum_id = c.id
 			WHERE cd.cluster_id = ? AND cd.department_id != ?
 		`
 		queryArgs = []interface{}{clusterID.Int64, sourceDeptID}
@@ -1191,13 +1190,13 @@ func shareCourseToCluster(sourceDeptID, sourceRegulationID, courseID int, target
 
 		// Link course to target regulation and semester
 		_, err = db.DB.Exec(`
-			INSERT IGNORE INTO curriculum_courses (regulation_id, semester_id, course_id)
+			INSERT IGNORE INTO curriculum_courses (curriculum_id, semester_id, course_id)
 			VALUES (?, ?, ?)
 		`, targetRegulationID, targetSemesterID, targetCourseID)
 
 		// Record in tracking table
 		_, _ = db.DB.Exec(`
-			INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+			INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 			VALUES (?, ?, 'course', ?, ?)
 			ON DUPLICATE KEY UPDATE copied_item_id = VALUES(copied_item_id)
 		`, sourceDeptID, targetDeptID, courseID, targetCourseID)
@@ -1210,9 +1209,9 @@ func shareCourseToCluster(sourceDeptID, sourceRegulationID, courseID int, target
 func unshareCourseFromCluster(sourceDeptID, courseID int) error {
 	// Get all copied courses from tracking table
 	rows, err := db.DB.Query(`
-		SELECT target_dept_id, copied_item_id 
+		SELECT target_curriculum_id, copied_item_id 
 		FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = 'course' AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = 'course' AND source_item_id = ?
 	`, sourceDeptID, courseID)
 	if err != nil {
 		return err
@@ -1229,8 +1228,8 @@ func unshareCourseFromCluster(sourceDeptID, courseID int) error {
 		// Get target regulation ID
 		var targetRegulationID int
 		err := db.DB.QueryRow(`
-			SELECT do.regulation_id 
-			FROM department_overview do
+			SELECT do.curriculum_id 
+			FROM curriculum_vision do
 			WHERE do.id = ?
 		`, targetDeptID).Scan(&targetRegulationID)
 		if err != nil {
@@ -1262,7 +1261,7 @@ func unshareCourseFromCluster(sourceDeptID, courseID int) error {
 	// Remove tracking records
 	_, err = db.DB.Exec(`
 		DELETE FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = 'course' AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = 'course' AND source_item_id = ?
 	`, sourceDeptID, courseID)
 
 	return err
@@ -1279,7 +1278,7 @@ func copyCoursesBetweenSemesters(sourceRegID, sourceSemID, targetRegID, targetSe
 		       c.total_marks, c.total_hours
 		FROM courses c
 		JOIN curriculum_courses cc ON c.course_id = cc.course_id
-		WHERE cc.regulation_id = ? AND cc.semester_id = ?
+		WHERE cc.curriculum_id = ? AND cc.semester_id = ?
 	`, sourceRegID, sourceSemID)
 	if err != nil {
 		return err
@@ -1340,7 +1339,7 @@ func copyCoursesBetweenSemesters(sourceRegID, sourceSemID, targetRegID, targetSe
 
 		// Link to target semester
 		_, err = db.DB.Exec(`
-			INSERT IGNORE INTO curriculum_courses (regulation_id, semester_id, course_id)
+			INSERT IGNORE INTO curriculum_courses (curriculum_id, semester_id, course_id)
 			VALUES (?, ?, ?)
 		`, targetRegID, targetSemID, targetCourseID)
 
@@ -1366,10 +1365,10 @@ func GetClusterSharedContent(w http.ResponseWriter, r *http.Request) {
 
 	// Get all departments in cluster
 	deptQuery := `
-		SELECT cd.department_id, do.regulation_id, c.name
+		SELECT cd.department_id, do.curriculum_id, c.name
 		FROM cluster_departments cd
-		JOIN department_overview do ON cd.department_id = do.id
-		JOIN curriculum c ON do.regulation_id = c.id
+		JOIN curriculum_vision do ON cd.department_id = do.id
+		JOIN curriculum c ON do.curriculum_id = c.id
 		WHERE cd.cluster_id = ?
 	`
 	rows, err := db.DB.Query(deptQuery, clusterID)
@@ -1387,11 +1386,11 @@ func GetClusterSharedContent(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&deptID, &regID, &name); err == nil {
 			dept := map[string]interface{}{
 				"department_id": deptID,
-				"regulation_id": regID,
+				"curriculum_id": regID,
 				"name":          name,
-				"mission":       fetchSharedItems(deptID, "department_mission", "mission_text"),
-				"peos":          fetchSharedItems(deptID, "department_peos", "peo_text"),
-				"psos":          fetchSharedItems(deptID, "department_psos", "pso_text"),
+				"mission":       fetchSharedItems(deptID, "curriculum_mission", "mission_text"),
+				"peos":          fetchSharedItems(deptID, "curriculum_peos", "peo_text"),
+				"psos":          fetchSharedItems(deptID, "curriculum_psos", "pso_text"),
 				"semesters":     fetchSharedSemesters(regID),
 				"honour_cards":  fetchSharedHonourCards(regID),
 			}
@@ -1407,7 +1406,7 @@ func GetClusterSharedContent(w http.ResponseWriter, r *http.Request) {
 
 // fetchSharedSemesters fetches normal cards (semesters, verticals, etc.) with CLUSTER visibility and their shared courses
 func fetchSharedSemesters(regulationID int) []map[string]interface{} {
-	query := "SELECT id, COALESCE(semester_number, 0), COALESCE(card_type, 'semester') FROM normal_cards WHERE regulation_id = ? AND visibility = 'CLUSTER' ORDER BY semester_number, id"
+	query := "SELECT id, COALESCE(semester_number, 0), COALESCE(card_type, 'semester') FROM normal_cards WHERE curriculum_id = ? AND visibility = 'CLUSTER' ORDER BY semester_number, id"
 	rows, err := db.DB.Query(query, regulationID)
 	if err != nil {
 		return []map[string]interface{}{}
@@ -1436,7 +1435,7 @@ func fetchSharedSemesters(regulationID int) []map[string]interface{} {
 
 // fetchSharedHonourCards fetches honour cards with CLUSTER visibility
 func fetchSharedHonourCards(regulationID int) []map[string]interface{} {
-	query := "SELECT id, title, semester_number FROM honour_cards WHERE regulation_id = ? AND visibility = 'CLUSTER' ORDER BY semester_number"
+	query := "SELECT id, title FROM honour_cards WHERE curriculum_id = ? AND visibility = 'CLUSTER' ORDER BY id"
 	rows, err := db.DB.Query(query, regulationID)
 	if err != nil {
 		return []map[string]interface{}{}
@@ -1445,13 +1444,12 @@ func fetchSharedHonourCards(regulationID int) []map[string]interface{} {
 
 	cards := []map[string]interface{}{}
 	for rows.Next() {
-		var id, semNum int
+		var id int
 		var title string
-		if err := rows.Scan(&id, &title, &semNum); err == nil {
+		if err := rows.Scan(&id, &title); err == nil {
 			card := map[string]interface{}{
-				"id":              id,
-				"title":           title,
-				"semester_number": semNum,
+				"id":    id,
+				"title": title,
 			}
 			cards = append(cards, card)
 		}
@@ -1465,7 +1463,7 @@ func fetchSharedCourses(regulationID, semesterID int) []map[string]interface{} {
 		SELECT c.course_id, c.course_code, c.course_name
 		FROM courses c
 		JOIN curriculum_courses cc ON c.course_id = cc.course_id
-		WHERE cc.regulation_id = ? AND cc.semester_id = ? AND c.visibility = 'CLUSTER'
+		WHERE cc.curriculum_id = ? AND cc.semester_id = ? AND c.visibility = 'CLUSTER'
 		ORDER BY c.course_code
 	`
 	rows, err := db.DB.Query(query, regulationID, semesterID)
@@ -1513,7 +1511,7 @@ func fetchSharedItems(deptID int, tableName, columnName string) []map[string]int
 }
 
 // copySyllabusData copies all syllabus-related data from source course to target course
-// This includes course_syllabus, syllabus_models, syllabus_titles, and syllabus_topics
+// This includes course_syllabus, syllabus, syllabus_titles, and syllabus_topics
 func copySyllabusData(sourceCourseID, targetCourseID int) error {
 	// First, check if source course has syllabus data
 	var sourceSyllabusID int
@@ -1587,7 +1585,7 @@ func copySyllabusModels(sourceSyllabusID, targetSyllabusID, sourceCourseID, targ
 	// Get all models from source syllabus
 	rows, err := db.DB.Query(`
 		SELECT id, model_name, name, position
-		FROM syllabus_models
+		FROM syllabus
 		WHERE syllabus_id = ? AND course_id = ?
 		ORDER BY position
 	`, sourceSyllabusID, sourceCourseID)
@@ -1608,7 +1606,7 @@ func copySyllabusModels(sourceSyllabusID, targetSyllabusID, sourceCourseID, targ
 
 		// Create model in target syllabus
 		result, err := db.DB.Exec(`
-			INSERT INTO syllabus_models (syllabus_id, model_name, name, position, course_id)
+			INSERT INTO syllabus (syllabus_id, model_name, name, position, course_id)
 			VALUES (?, ?, ?, ?, ?)
 		`, targetSyllabusID, modelName, name, position, targetCourseID)
 
@@ -1747,7 +1745,7 @@ func copyPEOPOMappings(sourceRegulationID, targetRegulationID int) error {
 	}
 
 	// Delete existing mappings for target regulation
-	_, err = db.DB.Exec("DELETE FROM peo_po_mapping WHERE regulation_id = ?", targetRegulationID)
+	_, err = db.DB.Exec("DELETE FROM peo_po_mapping WHERE curriculum_id = ?", targetRegulationID)
 	if err != nil {
 		return fmt.Errorf("error deleting existing PEO-PO mappings: %w", err)
 	}
@@ -1755,7 +1753,7 @@ func copyPEOPOMappings(sourceRegulationID, targetRegulationID int) error {
 	// Insert new mappings
 	for _, m := range mappings {
 		_, err := db.DB.Exec(`
-			INSERT INTO peo_po_mapping (regulation_id, peo_index, po_index, mapping_value)
+			INSERT INTO peo_po_mapping (curriculum_id, peo_index, po_index, mapping_value)
 			VALUES (?, ?, ?, ?)
 		`, targetRegulationID, m.peoIndex, m.poIndex, m.value)
 
@@ -1788,7 +1786,7 @@ func removeDepartmentsFromSemesterSharing(sourceDeptID, semesterID int, departme
 		err := db.DB.QueryRow(`
 			SELECT copied_item_id 
 			FROM sharing_tracking 
-			WHERE source_dept_id = ? AND target_dept_id = ? 
+			WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 			  AND item_type = 'semester' AND source_item_id = ?
 		`, sourceDeptID, targetDeptID, semesterID).Scan(&copiedSemID)
 
@@ -1802,7 +1800,7 @@ func removeDepartmentsFromSemesterSharing(sourceDeptID, semesterID int, departme
 
 		// Get regulation ID for the copied semester
 		var targetRegulationID int
-		db.DB.QueryRow("SELECT regulation_id FROM normal_cards WHERE id = ?", copiedSemID).Scan(&targetRegulationID)
+		db.DB.QueryRow("SELECT curriculum_id FROM normal_cards WHERE id = ?", copiedSemID).Scan(&targetRegulationID)
 
 		// Get all course IDs for this semester that need to be deleted (before deleting anything)
 		rows, err := db.DB.Query(`
@@ -1842,7 +1840,7 @@ func removeDepartmentsFromSemesterSharing(sourceDeptID, semesterID int, departme
 			// For each syllabus, delete its models and their content
 			for _, syllabusID := range syllabusIDs {
 				var modelIDs []int
-				modelRows, err := db.DB.Query("SELECT id FROM syllabus_models WHERE syllabus_id = ?", syllabusID)
+				modelRows, err := db.DB.Query("SELECT id FROM syllabus WHERE syllabus_id = ?", syllabusID)
 				if err == nil && modelRows != nil {
 					for modelRows.Next() {
 						var modelID int
@@ -1877,11 +1875,11 @@ func removeDepartmentsFromSemesterSharing(sourceDeptID, semesterID int, departme
 				}
 
 				// Delete models
-				db.DB.Exec("DELETE FROM syllabus_models WHERE syllabus_id = ?", syllabusID)
+				db.DB.Exec("DELETE FROM syllabus WHERE syllabus_id = ?", syllabusID)
 			}
 
 			// First, delete from curriculum_courses - ONLY for the target department's regulation
-			db.DB.Exec("DELETE FROM curriculum_courses WHERE course_id = ? AND regulation_id = ?", courseID, targetRegulationID)
+			db.DB.Exec("DELETE FROM curriculum_courses WHERE course_id = ? AND curriculum_id = ?", courseID, targetRegulationID)
 
 			// Check if this course is still being used by ANY other department
 			var usageCount int
@@ -1913,7 +1911,7 @@ func removeDepartmentsFromSemesterSharing(sourceDeptID, semesterID int, departme
 		// Remove tracking record for semester
 		db.DB.Exec(`
 			DELETE FROM sharing_tracking 
-			WHERE source_dept_id = ? AND target_dept_id = ? 
+			WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 			  AND item_type = 'semester' AND source_item_id = ?
 		`, sourceDeptID, targetDeptID, semesterID)
 
@@ -1921,7 +1919,7 @@ func removeDepartmentsFromSemesterSharing(sourceDeptID, semesterID int, departme
 		for _, courseID := range courseIDs {
 			db.DB.Exec(`
 				DELETE FROM sharing_tracking 
-				WHERE source_dept_id = ? AND target_dept_id = ? 
+				WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 				  AND item_type = 'course' AND copied_item_id = ?
 			`, sourceDeptID, targetDeptID, courseID)
 		}
@@ -1943,16 +1941,17 @@ func addDepartmentsToCourseSharing(sourceDeptID, sourceRegulationID, courseID in
 // mode can be: "replace" (default) - replace sharing list, "add" - add to existing list, "remove" - remove from list
 func updateHonourCardVisibility(cardID int, visibility string, targetDepartments []int, mode string) error {
 	// Get honour card and regulation info
-	var regulationID, semesterNum int
+	var regulationID int
+	var semesterNum sql.NullInt64
 	var sourceDeptID sql.NullInt64
-	err := db.DB.QueryRow("SELECT regulation_id, semester_number, source_department_id FROM honour_cards WHERE id = ?", cardID).Scan(&regulationID, &semesterNum, &sourceDeptID)
+	err := db.DB.QueryRow("SELECT curriculum_id, number, source_curriculum_id FROM honour_cards WHERE id = ?", cardID).Scan(&regulationID, &semesterNum, &sourceDeptID)
 	if err != nil {
 		return err
 	}
 
 	// Get department_id from regulation
 	var deptID int
-	err = db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regulationID).Scan(&deptID)
+	err = db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regulationID).Scan(&deptID)
 	if err != nil {
 		return err
 	}
@@ -1968,7 +1967,11 @@ func updateHonourCardVisibility(cardID int, visibility string, targetDepartments
 		switch mode {
 		case "add":
 			// Add new departments to existing sharing list
-			if err := addDepartmentsToHonourCardSharing(deptID, regulationID, cardID, semesterNum, targetDepartments); err != nil {
+			semNum := 0
+			if semesterNum.Valid {
+				semNum = int(semesterNum.Int64)
+			}
+			if err := addDepartmentsToHonourCardSharing(deptID, regulationID, cardID, semNum, targetDepartments); err != nil {
 				log.Printf("Error adding departments to honour card sharing: %v\n", err)
 				return err
 			}
@@ -1984,7 +1987,7 @@ func updateHonourCardVisibility(cardID int, visibility string, targetDepartments
 			var shareCount int
 			db.DB.QueryRow(`
 				SELECT COUNT(*) FROM sharing_tracking 
-				WHERE source_dept_id = ? AND source_item_id = ? AND item_type = 'honour_card'
+				WHERE source_curriculum_id = ? AND source_item_id = ? AND item_type = 'honour_card'
 			`, deptID, cardID).Scan(&shareCount)
 
 			// If no more shares, update to UNIQUE; otherwise keep as CLUSTER
@@ -2003,7 +2006,11 @@ func updateHonourCardVisibility(cardID int, visibility string, targetDepartments
 				return err
 			}
 
-			if err := shareHonourCardToCluster(deptID, regulationID, cardID, semesterNum, targetDepartments); err != nil {
+			semNum := 0
+			if semesterNum.Valid {
+				semNum = int(semesterNum.Int64)
+			}
+			if err := shareHonourCardToCluster(deptID, regulationID, cardID, semNum, targetDepartments); err != nil {
 				log.Printf("Error sharing honour card: %v\n", err)
 				return err
 			}
@@ -2064,18 +2071,18 @@ func shareHonourCardToCluster(sourceDeptID, sourceRegulationID, cardID, semester
 			queryArgs = append(queryArgs, targetDepartments[i])
 		}
 		targetDeptQuery = fmt.Sprintf(`
-			SELECT cd.department_id, do.regulation_id 
+			SELECT cd.department_id, do.curriculum_id 
 			FROM cluster_departments cd
-			JOIN department_overview do ON cd.department_id = do.id
+			JOIN curriculum_vision do ON cd.department_id = do.id
 			WHERE cd.cluster_id = ? AND cd.department_id != ? AND cd.department_id IN (%s)
 		`, placeholders)
 		queryArgs = append([]interface{}{clusterID.Int64, sourceDeptID}, queryArgs...)
 	} else {
 		// Share with all departments
 		targetDeptQuery = `
-			SELECT cd.department_id, do.regulation_id 
+			SELECT cd.department_id, do.curriculum_id 
 			FROM cluster_departments cd
-			JOIN department_overview do ON cd.department_id = do.id
+			JOIN curriculum_vision do ON cd.department_id = do.id
 			WHERE cd.cluster_id = ? AND cd.department_id != ?
 		`
 		queryArgs = []interface{}{clusterID.Int64, sourceDeptID}
@@ -2123,15 +2130,15 @@ func shareHonourCardToCluster(sourceDeptID, sourceRegulationID, cardID, semester
 		var existingCardID int
 		err := db.DB.QueryRow(`
 			SELECT id FROM honour_cards 
-			WHERE regulation_id = ? AND semester_number = ? AND source_department_id = ?
-		`, targetRegulationID, semesterNum, sourceDeptID).Scan(&existingCardID)
+			WHERE curriculum_id = ? AND title = ? AND source_curriculum_id = ?
+		`, targetRegulationID, title, sourceDeptID).Scan(&existingCardID)
 
 		if err == sql.ErrNoRows {
 			// Create the honour card copy
 			result, err := db.DB.Exec(`
-				INSERT INTO honour_cards (regulation_id, title, semester_number, visibility, source_department_id)
-				VALUES (?, ?, ?, 'CLUSTER', ?)
-			`, targetRegulationID, title, semesterNum, sourceDeptID)
+				INSERT INTO honour_cards (curriculum_id, title, visibility, source_curriculum_id)
+				VALUES (?, ?, 'CLUSTER', ?)
+			`, targetRegulationID, title, sourceDeptID)
 			if err != nil {
 				log.Printf("Error creating honour card copy for dept %d: %v\n", targetDeptID, err)
 				continue
@@ -2141,7 +2148,7 @@ func shareHonourCardToCluster(sourceDeptID, sourceRegulationID, cardID, semester
 
 			// Record in tracking table
 			_, _ = db.DB.Exec(`
-				INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+				INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 				VALUES (?, ?, 'honour_card', ?, ?)
 			`, sourceDeptID, targetDeptID, cardID, copiedCardID)
 
@@ -2179,7 +2186,7 @@ func shareHonourCardToCluster(sourceDeptID, sourceRegulationID, cardID, semester
 		} else if err == nil {
 			// Already exists, update tracking
 			_, _ = db.DB.Exec(`
-				INSERT INTO sharing_tracking (source_dept_id, target_dept_id, item_type, source_item_id, copied_item_id)
+				INSERT INTO sharing_tracking (source_curriculum_id, target_curriculum_id, item_type, source_item_id, copied_item_id)
 				VALUES (?, ?, 'honour_card', ?, ?)
 				ON DUPLICATE KEY UPDATE copied_item_id = VALUES(copied_item_id)
 			`, sourceDeptID, targetDeptID, cardID, existingCardID)
@@ -2193,9 +2200,9 @@ func shareHonourCardToCluster(sourceDeptID, sourceRegulationID, cardID, semester
 func unshareHonourCardFromCluster(sourceDeptID, cardID int) error {
 	// Get all copied honour cards from tracking table
 	rows, err := db.DB.Query(`
-		SELECT target_dept_id, copied_item_id 
+		SELECT target_curriculum_id, copied_item_id 
 		FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = 'honour_card' AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = 'honour_card' AND source_item_id = ?
 	`, sourceDeptID, cardID)
 	if err != nil {
 		return err
@@ -2226,7 +2233,7 @@ func unshareHonourCardFromCluster(sourceDeptID, cardID int) error {
 		_, _ = db.DB.Exec("DELETE FROM honour_verticals WHERE honour_card_id = ?", copiedCardID)
 
 		// Delete the honour card itself
-		_, err = db.DB.Exec("DELETE FROM honour_cards WHERE id = ? AND source_department_id = ?", copiedCardID, sourceDeptID)
+		_, err = db.DB.Exec("DELETE FROM honour_cards WHERE id = ? AND source_curriculum_id = ?", copiedCardID, sourceDeptID)
 		if err != nil {
 			log.Printf("Error removing shared honour card %d: %v\n", copiedCardID, err)
 		}
@@ -2235,7 +2242,7 @@ func unshareHonourCardFromCluster(sourceDeptID, cardID int) error {
 	// Remove tracking records
 	_, err = db.DB.Exec(`
 		DELETE FROM sharing_tracking 
-		WHERE source_dept_id = ? AND item_type = 'honour_card' AND source_item_id = ?
+		WHERE source_curriculum_id = ? AND item_type = 'honour_card' AND source_item_id = ?
 	`, sourceDeptID, cardID)
 	return err
 }
@@ -2257,7 +2264,7 @@ func removeDepartmentsFromHonourCardSharing(sourceDeptID, cardID int, department
 		err := db.DB.QueryRow(`
 			SELECT copied_item_id 
 			FROM sharing_tracking 
-			WHERE source_dept_id = ? AND target_dept_id = ? 
+			WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 			  AND item_type = 'honour_card' AND source_item_id = ?
 		`, sourceDeptID, targetDeptID, cardID).Scan(&copiedCardID)
 
@@ -2286,7 +2293,7 @@ func removeDepartmentsFromHonourCardSharing(sourceDeptID, cardID int, department
 		_, _ = db.DB.Exec("DELETE FROM honour_verticals WHERE honour_card_id = ?", copiedCardID)
 
 		// Delete the honour card itself
-		_, err = db.DB.Exec("DELETE FROM honour_cards WHERE id = ? AND source_department_id = ?", copiedCardID, sourceDeptID)
+		_, err = db.DB.Exec("DELETE FROM honour_cards WHERE id = ? AND source_curriculum_id = ?", copiedCardID, sourceDeptID)
 		if err != nil {
 			log.Printf("Error removing shared honour card %d: %v\n", copiedCardID, err)
 		}
@@ -2294,7 +2301,7 @@ func removeDepartmentsFromHonourCardSharing(sourceDeptID, cardID int, department
 		// Remove tracking record for honour card
 		_, _ = db.DB.Exec(`
 			DELETE FROM sharing_tracking 
-			WHERE source_dept_id = ? AND target_dept_id = ? 
+			WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 			  AND item_type = 'honour_card' AND source_item_id = ?
 		`, sourceDeptID, targetDeptID, cardID)
 	}
@@ -2313,7 +2320,7 @@ func removeDepartmentsFromCourseSharing(sourceDeptID, courseID int, departmentsT
 		err := db.DB.QueryRow(`
 			SELECT copied_item_id 
 			FROM sharing_tracking 
-			WHERE source_dept_id = ? AND target_dept_id = ? 
+			WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 			  AND item_type = 'course' AND source_item_id = ?
 		`, sourceDeptID, targetDeptID, courseID).Scan(&copiedCourseID)
 
@@ -2328,8 +2335,8 @@ func removeDepartmentsFromCourseSharing(sourceDeptID, courseID int, departmentsT
 		// Get target regulation ID
 		var targetRegulationID int
 		err = db.DB.QueryRow(`
-			SELECT do.regulation_id 
-			FROM department_overview do
+			SELECT do.curriculum_id 
+			FROM curriculum_vision do
 			WHERE do.id = ?
 		`, targetDeptID).Scan(&targetRegulationID)
 		if err != nil {
@@ -2355,7 +2362,7 @@ func removeDepartmentsFromCourseSharing(sourceDeptID, courseID int, departmentsT
 		// For each syllabus, delete its models and their content
 		for _, syllabusID := range syllabusIDs {
 			var modelIDs []int
-			modelRows, err := db.DB.Query("SELECT id FROM syllabus_models WHERE syllabus_id = ?", syllabusID)
+			modelRows, err := db.DB.Query("SELECT id FROM syllabus WHERE syllabus_id = ?", syllabusID)
 			if err == nil && modelRows != nil {
 				for modelRows.Next() {
 					var modelID int
@@ -2390,7 +2397,7 @@ func removeDepartmentsFromCourseSharing(sourceDeptID, courseID int, departmentsT
 			}
 
 			// Delete models
-			db.DB.Exec("DELETE FROM syllabus_models WHERE syllabus_id = ?", syllabusID)
+			db.DB.Exec("DELETE FROM syllabus WHERE syllabus_id = ?", syllabusID)
 		}
 
 		// First, remove course from curriculum_courses for this specific regulation
@@ -2424,7 +2431,7 @@ func removeDepartmentsFromCourseSharing(sourceDeptID, courseID int, departmentsT
 		var shareCount int
 		db.DB.QueryRow(`
 			SELECT COUNT(*) FROM sharing_tracking 
-			WHERE source_item_id = ? AND item_type = 'course' AND source_dept_id = ?
+			WHERE source_item_id = ? AND item_type = 'course' AND source_curriculum_id = ?
 		`, courseID, sourceDeptID).Scan(&shareCount)
 
 		// If this was the last sharing instance, update source course visibility back to UNIQUE
@@ -2436,7 +2443,7 @@ func removeDepartmentsFromCourseSharing(sourceDeptID, courseID int, departmentsT
 		// Remove tracking record
 		db.DB.Exec(`
 			DELETE FROM sharing_tracking 
-			WHERE source_dept_id = ? AND target_dept_id = ? 
+			WHERE source_curriculum_id = ? AND target_curriculum_id = ? 
 			  AND item_type = 'course' AND source_item_id = ?
 		`, sourceDeptID, targetDeptID, courseID)
 	}
@@ -2466,7 +2473,7 @@ func GetItemSharedDepartments(w http.ResponseWriter, r *http.Request) {
 		err = db.DB.QueryRow(`
 			SELECT do.id 
 			FROM normal_cards s
-			JOIN department_overview do ON s.regulation_id = do.regulation_id
+			JOIN curriculum_vision do ON s.curriculum_id = do.curriculum_id
 			WHERE s.id = ? AND (s.source_department_id IS NULL OR s.source_department_id = do.id)
 		`, itemID).Scan(&sourceDeptID)
 	case "course":
@@ -2474,29 +2481,29 @@ func GetItemSharedDepartments(w http.ResponseWriter, r *http.Request) {
 			SELECT do.id 
 			FROM courses c
 			JOIN curriculum_courses cc ON c.course_id = cc.course_id
-			JOIN department_overview do ON cc.regulation_id = do.regulation_id
+			JOIN curriculum_vision do ON cc.curriculum_id = do.curriculum_id
 			WHERE c.course_id = ?
 			LIMIT 1
 		`, itemID).Scan(&sourceDeptID)
 	case "mission", "peos", "psos":
 		tableName := map[string]string{
-			"mission": "department_mission",
-			"peos":    "department_peos",
-			"psos":    "department_psos",
+			"mission": "curriculum_mission",
+			"peos":    "curriculum_peos",
+			"psos":    "curriculum_psos",
 		}[itemType]
 		query := fmt.Sprintf("SELECT department_id FROM %s WHERE id = ?", tableName)
 		err = db.DB.QueryRow(query, itemID).Scan(&sourceDeptID)
 	case "honour_card":
-		// For honour cards, source_department_id is stored directly on honour_cards
+		// For honour cards, source_curriculum_id is stored directly on honour_cards
 		var srcDept sql.NullInt64
 		var regID int
-		err = db.DB.QueryRow("SELECT COALESCE(source_department_id, 0), regulation_id FROM honour_cards WHERE id = ?", itemID).Scan(&srcDept, &regID)
+		err = db.DB.QueryRow("SELECT COALESCE(source_curriculum_id, 0), curriculum_id FROM honour_cards WHERE id = ?", itemID).Scan(&srcDept, &regID)
 		if err == nil {
 			if srcDept.Valid && srcDept.Int64 > 0 {
 				sourceDeptID = int(srcDept.Int64)
 			} else {
 				// Resolve owning department from regulation
-				_ = db.DB.QueryRow("SELECT id FROM department_overview WHERE regulation_id = ?", regID).Scan(&sourceDeptID)
+				_ = db.DB.QueryRow("SELECT id FROM curriculum_vision WHERE curriculum_id = ?", regID).Scan(&sourceDeptID)
 			}
 		}
 	default:
@@ -2513,9 +2520,9 @@ func GetItemSharedDepartments(w http.ResponseWriter, r *http.Request) {
 
 	// Get departments that have this item from sharing_tracking
 	rows, err := db.DB.Query(`
-		SELECT DISTINCT target_dept_id
+		SELECT DISTINCT target_curriculum_id
 		FROM sharing_tracking
-		WHERE source_dept_id = ? AND source_item_id = ? AND item_type = ?
+		WHERE source_curriculum_id = ? AND source_item_id = ? AND item_type = ?
 	`, sourceDeptID, itemID, itemType)
 
 	if err != nil {

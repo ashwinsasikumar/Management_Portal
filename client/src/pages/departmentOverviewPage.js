@@ -27,7 +27,7 @@ function DepartmentOverviewPage() {
   const fetchOverview = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/overview`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/overview`)
       if (!response.ok) {
         throw new Error('Failed to fetch overview data')
       }
@@ -56,7 +56,7 @@ function DepartmentOverviewPage() {
       setError('')
       setSuccess('')
       
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/overview`, {
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/overview`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ function DepartmentOverviewPage() {
 
   if (loading) {
     return (
-      <MainLayout title="Regulation Overview" subtitle="Loading...">
+      <MainLayout title="Curriculum Overview" subtitle="Loading...">
         <div className="flex justify-center items-center py-20">
           <div className="text-center">
             <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -210,8 +210,8 @@ function DepartmentOverviewPage() {
 
   return (
     <MainLayout 
-      title="Regulation Overview" 
-      subtitle={`Vision, Mission, PEOs & POs - Regulation ID: ${id}`}
+      title="Curriculum Overview" 
+      subtitle={`Vision, Mission, PEOs & POs - Curriculum ID: ${id}`}
       actions={
         <div className="flex items-center space-x-3">
           <button
@@ -224,7 +224,7 @@ function DepartmentOverviewPage() {
             <span>Back</span>
           </button>
           <button
-            onClick={() => navigate(`/regulation/${id}/peo-po-mapping`)}
+            onClick={() => navigate(`/curriculum/${id}/peo-po-mapping`)}
             className="btn-secondary-custom flex items-center space-x-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,7 +233,7 @@ function DepartmentOverviewPage() {
             <span>PEO-PO Mapping</span>
           </button>
           <button
-            onClick={() => navigate(`/regulation/${id}/curriculum`)}
+            onClick={() => navigate(`/curriculum/${id}/curriculum`)}
             className="btn-primary-custom flex items-center space-x-2"
           >
             <span>Manage Curriculum</span>

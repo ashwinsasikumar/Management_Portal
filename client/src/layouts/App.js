@@ -15,39 +15,40 @@ import SharingManagementPage from "../pages/sharingManagementPage";
 import RegulationPage from "../pages/regulation/regulationPage";
 import RegulationEditorPage from "../pages/regulation/regulationEditorPage";
 import UsersPage from "../pages/usersPage";
+import PrivateRoute from "../components/PrivateRoute";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/users" element={<UsersPage />} />
-      <Route path="/regulations" element={<RegulationPage />} />
-      <Route path="/regulation/:id/editor" element={<RegulationEditorPage />} />
-      <Route path="/curriculum" element={<CurriculumMainPage />} />
-      <Route path="/clusters" element={<ClusterManagementPage />} />
-      <Route path="/sharing" element={<SharingManagementPage />} />
+      <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+      <Route path="/users" element={<PrivateRoute><UsersPage /></PrivateRoute>} />
+      <Route path="/regulations" element={<PrivateRoute><RegulationPage /></PrivateRoute>} />
+      <Route path="/curriculum/:id/editor" element={<PrivateRoute><RegulationEditorPage /></PrivateRoute>} />
+      <Route path="/curriculum" element={<PrivateRoute><CurriculumMainPage /></PrivateRoute>} />
+      <Route path="/clusters" element={<PrivateRoute><ClusterManagementPage /></PrivateRoute>} />
+      <Route path="/sharing" element={<PrivateRoute><SharingManagementPage /></PrivateRoute>} />
       <Route
-        path="/regulation/:id/overview"
-        element={<DepartmentOverviewPage />}
+        path="/curriculum/:id/overview"
+        element={<PrivateRoute><DepartmentOverviewPage /></PrivateRoute>}
       />
       <Route
-        path="/regulation/:id/curriculum"
-        element={<ManageCurriculumPage />}
+        path="/curriculum/:id/curriculum"
+        element={<PrivateRoute><ManageCurriculumPage /></PrivateRoute>}
       />
       <Route
-        path="/regulation/:id/curriculum/semester/:semId"
-        element={<SemesterDetailPage />}
+        path="/curriculum/:id/curriculum/semester/:semId"
+        element={<PrivateRoute><SemesterDetailPage /></PrivateRoute>}
       />
       <Route
-        path="/regulation/:id/curriculum/honour/:cardId"
-        element={<HonourCardPage />}
+        path="/curriculum/:id/curriculum/honour/:cardId"
+        element={<PrivateRoute><HonourCardPage /></PrivateRoute>}
       />
-      <Route path="/course/:courseId/syllabus" element={<SyllabusPage />} />
-      <Route path="/course/:courseId/mapping" element={<MappingPage />} />
+      <Route path="/course/:courseId/syllabus" element={<PrivateRoute><SyllabusPage /></PrivateRoute>} />
+      <Route path="/course/:courseId/mapping" element={<PrivateRoute><MappingPage /></PrivateRoute>} />
       <Route
-        path="/regulation/:id/peo-po-mapping"
-        element={<PEOPOMappingPage />}
+        path="/curriculum/:id/peo-po-mapping"
+        element={<PrivateRoute><PEOPOMappingPage /></PrivateRoute>}
       />
     </Routes>
   );

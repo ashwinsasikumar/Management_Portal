@@ -120,7 +120,7 @@ func generateHTMLPreview(w http.ResponseWriter, data *models.RegulationPDF) {
 
 func fetchCompleteRegulationData(regulationID int) (*models.RegulationPDF, error) {
 	pdfData := &models.RegulationPDF{
-		RegulationID: regulationID,
+		CurriculumID: regulationID,
 	}
 
 	// Fetch regulation basic info including curriculum_template
@@ -140,27 +140,27 @@ func fetchCompleteRegulationData(regulationID int) (*models.RegulationPDF, error
 	var departmentID int
 	err = db.DB.QueryRow(`
 		SELECT id, vision 
-		FROM department_overview 
-		WHERE regulation_id = ?`, regulationID).
+		FROM curriculum_vision 
+		WHERE curriculum_id = ?`, regulationID).
 		Scan(&departmentID, &pdfData.Overview.Vision)
 
 	if err == nil {
 		// Fetch mission items from normalized table
-		pdfData.Overview.Mission = fetchDepartmentListItemsHTML(departmentID, "department_mission", "mission_text")
+		pdfData.Overview.Mission = fetchDepartmentListItemsHTML(departmentID, "curriculum_mission", "mission_text")
 
 		// Fetch PEOs from normalized table
-		pdfData.Overview.PEOs = fetchDepartmentListItemsHTML(departmentID, "department_peos", "peo_text")
+		pdfData.Overview.PEOs = fetchDepartmentListItemsHTML(departmentID, "curriculum_peos", "peo_text")
 
 		// Fetch POs from normalized table
-		pdfData.Overview.POs = fetchDepartmentListItemsHTML(departmentID, "department_pos", "po_text")
+		pdfData.Overview.POs = fetchDepartmentListItemsHTML(departmentID, "curriculum_pos", "po_text")
 
 		// Fetch PSOs from normalized table
-		pdfData.Overview.PSOs = fetchDepartmentListItemsHTML(departmentID, "department_psos", "pso_text")
+		pdfData.Overview.PSOs = fetchDepartmentListItemsHTML(departmentID, "curriculum_psos", "pso_text")
 	}
 
 	// Fetch PEO-PO mapping
 	pdfData.PEOPOMapping = make(map[string]int)
-	rows, _ := db.DB.Query("SELECT peo_index, po_index, mapping_value FROM peo_po_mapping WHERE regulation_id = ?", regulationID)
+	rows, _ := db.DB.Query("SELECT peo_index, po_index, mapping_value FROM peo_po_mapping WHERE curriculum_id = ?", regulationID)
 	if rows != nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -175,7 +175,7 @@ func fetchCompleteRegulationData(regulationID int) (*models.RegulationPDF, error
 	semRows, err := db.DB.Query(`
 		SELECT id, semester_number, COALESCE(card_type, 'semester') as card_type 
 		FROM normal_cards 
-		WHERE regulation_id = ? 
+		WHERE curriculum_id = ? 
 		ORDER BY 
 			CASE card_type 
 				WHEN 'semester' THEN 1 
@@ -216,7 +216,7 @@ func fetchCompleteRegulationData(regulationID int) (*models.RegulationPDF, error
 			       c.cia_marks, c.see_marks, c.total_marks
 			FROM courses c
 			INNER JOIN curriculum_courses rc ON c.course_id = rc.course_id
-			WHERE rc.regulation_id = ? AND rc.semester_id = ?
+			WHERE rc.curriculum_id = ? AND rc.semester_id = ?
 			ORDER BY rc.id`, regulationID, semID) // Order by junction table ID to preserve insertion order
 
 		if courseRows != nil {
@@ -312,23 +312,22 @@ func fetchCompleteRegulationData(regulationID int) (*models.RegulationPDF, error
 
 	// Fetch honour cards
 	honourRows, err := db.DB.Query(`
-		SELECT id, title, semester_number 
+		SELECT id, title 
 		FROM honour_cards 
-		WHERE regulation_id = ? 
-		ORDER BY semester_number`, regulationID)
+		WHERE curriculum_id = ? 
+		ORDER BY id`, regulationID)
 	if err == nil {
 		defer honourRows.Close()
 
 		for honourRows.Next() {
-			var honourID, semNum int
+			var honourID int
 			var title string
-			honourRows.Scan(&honourID, &title, &semNum)
+			honourRows.Scan(&honourID, &title)
 
 			honourCard := models.HonourCardPDF{
-				ID:             honourID,
-				Title:          title,
-				SemesterNumber: semNum,
-				Verticals:      []models.HonourVerticalPDF{},
+				ID:        honourID,
+				Title:     title,
+				Verticals: []models.HonourVerticalPDF{},
 			}
 
 			// Fetch verticals for this honour card
@@ -403,7 +402,7 @@ func fetchModelsForPDF(courseID int) []models.SyllabusModelPDF {
 
 	modelRows, err := db.DB.Query(`
 		SELECT id, model_name, position 
-		FROM syllabus_models 
+		FROM syllabus 
 		WHERE course_id = ? 
 		ORDER BY position, id`, courseID)
 
@@ -956,9 +955,9 @@ const htmlTemplate = `<!DOCTYPE html>
 <h1>SUMMARY OF CREDIT DISTRIBUTION</h1>
 {{range .Semesters}}
 {{if eq .CardType "semester"}}
-<h2>SEMESTER {{.SemesterNumber}}</h2>
+<h2>SEMESTER {{.Number}}</h2>
 {{else if eq .CardType "vertical"}}
-<h2>VERTICAL {{.SemesterNumber}}</h2>
+<h2>VERTICAL {{.Number}}</h2>
 {{else if eq .CardType "elective"}}
 <h2>ELECTIVE COURSES</h2>
 {{else if eq .CardType "open_elective"}}
@@ -1042,6 +1041,7 @@ const htmlTemplate = `<!DOCTYPE html>
 	</div>
 	
 	<!-- Prerequisites -->
+	{{if ne $.CurriculumTemplate "2022"}}
 	{{if $course.Syllabus.Prerequisites}}
 	<h3>Prerequisites</h3>
 	<ul>
@@ -1049,6 +1049,7 @@ const htmlTemplate = `<!DOCTYPE html>
 		<li>{{.}}</li>
 	{{end}}
 	</ul>
+	{{end}}
 	{{end}}
 	
 	<!-- Objectives -->
@@ -1144,7 +1145,25 @@ const htmlTemplate = `<!DOCTYPE html>
 	{{end}}
 	{{end}}
 	
+	<!-- Experiments for 2022 Template -->
+	{{if and (eq $.CurriculumTemplate "2022") $course.Experiments}}
+	<h3>Experiments</h3>
+	{{range $course.Experiments}}
+	<div class="module">
+		<div class="module-title">Experiment {{.ExperimentNumber}}: {{.ExperimentName}}</div>
+		{{if .Topics}}
+		<div class="topic-list">
+		{{range .Topics}}
+			<div>• {{.}}</div>
+		{{end}}
+		</div>
+		{{end}}
+	</div>
+	{{end}}
+	{{end}}
+	
 	<!-- Teamwork -->
+	{{if ne $.CurriculumTemplate "2022"}}
 	{{if $course.Syllabus.Teamwork}}
 	<h3>Teamwork ({{$course.Syllabus.Teamwork.Hours}} hours)</h3>
 	<ul>
@@ -1153,8 +1172,10 @@ const htmlTemplate = `<!DOCTYPE html>
 	{{end}}
 	</ul>
 	{{end}}
+	{{end}}
 	
 	<!-- Self Learning -->
+	{{if ne $.CurriculumTemplate "2022"}}
 	{{if $course.Syllabus.SelfLearning}}
 	<h3>Self Learning ({{$course.Syllabus.SelfLearning.Hours}} hours)</h3>
 	{{range $course.Syllabus.SelfLearning.MainInputs}}
@@ -1168,6 +1189,7 @@ const htmlTemplate = `<!DOCTYPE html>
 		</ul>
 		{{end}}
 	</div>
+	{{end}}
 	{{end}}
 	{{end}}
 	
@@ -1190,7 +1212,7 @@ const htmlTemplate = `<!DOCTYPE html>
 <!-- Honour Cards -->
 {{range $honourIdx, $honour := .HonourCards}}
 <div class="page-break"></div>
-<h1>{{$honour.Title}} - SEMESTER {{$honour.SemesterNumber}}</h1>
+<h1>{{$honour.Title}} - SEMESTER {{$honour.Number}}</h1>
 
 {{range $verticalIdx, $vertical := $honour.Verticals}}
 <h2>{{$vertical.Name}}</h2>
@@ -1263,6 +1285,7 @@ const htmlTemplate = `<!DOCTYPE html>
 	</div>
 	
 	<!-- Prerequisites -->
+	{{if ne $.CurriculumTemplate "2022"}}
 	{{if $course.Syllabus.Prerequisites}}
 	<h3>Prerequisites</h3>
 	<ul>
@@ -1270,6 +1293,7 @@ const htmlTemplate = `<!DOCTYPE html>
 		<li>{{.}}</li>
 	{{end}}
 	</ul>
+	{{end}}
 	{{end}}
 	
 	<!-- Objectives -->
@@ -1315,7 +1339,25 @@ const htmlTemplate = `<!DOCTYPE html>
 	{{end}}
 	{{end}}
 	
+	<!-- Experiments for 2022 Template -->
+	{{if and (eq $.CurriculumTemplate "2022") $course.Experiments}}
+	<h3>Experiments</h3>
+	{{range $course.Experiments}}
+	<div class="module">
+		<div class="module-title">Experiment {{.ExperimentNumber}}: {{.ExperimentName}}</div>
+		{{if .Topics}}
+		<div class="topic-list">
+		{{range .Topics}}
+			<div>• {{.}}</div>
+		{{end}}
+		</div>
+		{{end}}
+	</div>
+	{{end}}
+	{{end}}
+	
 	<!-- Teamwork -->
+	{{if ne $.CurriculumTemplate "2022"}}
 	{{if $course.Syllabus.Teamwork}}
 	<h3>Teamwork ({{$course.Syllabus.Teamwork.Hours}} hours)</h3>
 	<ul>
@@ -1324,8 +1366,10 @@ const htmlTemplate = `<!DOCTYPE html>
 	{{end}}
 	</ul>
 	{{end}}
+	{{end}}
 	
 	<!-- Self Learning -->
+	{{if ne $.CurriculumTemplate "2022"}}
 	{{if $course.Syllabus.SelfLearning}}
 	<h3>Self Learning ({{$course.Syllabus.SelfLearning.Hours}} hours)</h3>
 	{{range $course.Syllabus.SelfLearning.MainInputs}}
@@ -1339,6 +1383,7 @@ const htmlTemplate = `<!DOCTYPE html>
 		</ul>
 		{{end}}
 	</div>
+	{{end}}
 	{{end}}
 	{{end}}
 	

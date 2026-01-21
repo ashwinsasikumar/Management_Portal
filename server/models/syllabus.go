@@ -25,5 +25,5 @@ type Syllabus struct {
 	ReferenceList []string      `json:"reference_list"`         // from course_references table
 	Prerequisites []string      `json:"prerequisites"`          // from course_prerequisites table
 	Teamwork      *Teamwork     `json:"teamwork,omitempty"`     // from course_teamwork + course_teamwork_activities
-	SelfLearning  *SelfLearning `json:"selflearning,omitempty"` // from course_selflearning + course_selflearning_main + course_selflearning_internal
+	SelfLearning  *SelfLearning `json:"selflearning,omitempty"` // from course_selflearning + course_selflearning_topics + course_selflearning_resources
 }

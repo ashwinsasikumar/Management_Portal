@@ -20,20 +20,20 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// GenerateRegulationPDF handles GET /regulation/:id/pdf
+// GenerateRegulationPDF handles GET /curriculum/:id/pdf
 func GenerateRegulationPDF(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		http.Error(w, "Invalid regulation ID", http.StatusBadRequest)
+		http.Error(w, "Invalid curriculum ID", http.StatusBadRequest)
 		return
 	}
 
-	// Fetch all data for the regulation
-	pdfData, err := fetchRegulationData(regulationID)
+	// Fetch all data for the curriculum
+	pdfData, err := fetchRegulationData(curriculumID)
 	if err != nil {
-		log.Println("Error fetching regulation data:", err)
-		http.Error(w, "Failed to fetch regulation data", http.StatusInternalServerError)
+		log.Println("Error fetching curriculum data:", err)
+		http.Error(w, "Failed to fetch curriculum data", http.StatusInternalServerError)
 		return
 	}
 
@@ -47,18 +47,18 @@ func GenerateRegulationPDF(w http.ResponseWriter, r *http.Request) {
 
 	// Set headers and stream PDF
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=regulation_%d.pdf", regulationID))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=curriculum_%d.pdf", curriculumID))
 	w.Header().Set("Content-Length", strconv.Itoa(len(pdfBytes)))
 	w.Write(pdfBytes)
 }
 
-func fetchRegulationData(regulationID int) (*models.RegulationPDF, error) {
+func fetchRegulationData(curriculumID int) (*models.RegulationPDF, error) {
 	pdfData := &models.RegulationPDF{
-		RegulationID: regulationID,
+		CurriculumID: curriculumID,
 	}
 
-	// Fetch regulation basic info
-	err := db.DB.QueryRow("SELECT name, academic_year FROM curriculum WHERE id = ?", regulationID).
+	// Fetch curriculum basic info
+	err := db.DB.QueryRow("SELECT name, academic_year FROM curriculum WHERE id = ?", curriculumID).
 		Scan(&pdfData.RegulationName, &pdfData.AcademicYear)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch curriculum: %v", err)
@@ -68,27 +68,27 @@ func fetchRegulationData(regulationID int) (*models.RegulationPDF, error) {
 	var departmentID int
 	err = db.DB.QueryRow(`
 		SELECT id, vision 
-		FROM department_overview 
-		WHERE regulation_id = ?`, regulationID).
+		FROM curriculum_vision 
+		WHERE regulation_id = ?`, curriculumID).
 		Scan(&departmentID, &pdfData.Overview.Vision)
 
 	if err == nil {
 		// Fetch mission items from normalized table
-		pdfData.Overview.Mission = fetchDepartmentListItems(departmentID, "department_mission", "mission_text")
+		pdfData.Overview.Mission = fetchDepartmentListItems(departmentID, "curriculum_mission", "mission_text")
 
 		// Fetch PEOs from normalized table
-		pdfData.Overview.PEOs = fetchDepartmentListItems(departmentID, "department_peos", "peo_text")
+		pdfData.Overview.PEOs = fetchDepartmentListItems(departmentID, "curriculum_peos", "peo_text")
 
 		// Fetch POs from normalized table
-		pdfData.Overview.POs = fetchDepartmentListItems(departmentID, "department_pos", "po_text")
+		pdfData.Overview.POs = fetchDepartmentListItems(departmentID, "curriculum_pos", "po_text")
 
 		// Fetch PSOs from normalized table
-		pdfData.Overview.PSOs = fetchDepartmentListItems(departmentID, "department_psos", "pso_text")
+		pdfData.Overview.PSOs = fetchDepartmentListItems(departmentID, "curriculum_psos", "pso_text")
 	}
 
 	// Fetch PEO-PO mapping
 	pdfData.PEOPOMapping = make(map[string]int)
-	rows, _ := db.DB.Query("SELECT peo_index, po_index, mapping_value FROM peo_po_mapping WHERE regulation_id = ?", regulationID)
+	rows, _ := db.DB.Query("SELECT peo_index, po_index, mapping_value FROM peo_po_mapping WHERE curriculum_id = ?", curriculumID)
 	if rows != nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -100,7 +100,7 @@ func fetchRegulationData(regulationID int) (*models.RegulationPDF, error) {
 	}
 
 	// Fetch semesters
-	semRows, err := db.DB.Query("SELECT id, semester_number FROM semesters WHERE regulation_id = ? ORDER BY semester_number", regulationID)
+	semRows, err := db.DB.Query("SELECT id, semester_number FROM semesters WHERE regulation_id = ? ORDER BY semester_number", curriculumID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch semesters: %v", err)
 	}
@@ -122,8 +122,8 @@ func fetchRegulationData(regulationID int) (*models.RegulationPDF, error) {
 			       c.cia_marks, c.see_marks, c.total_marks
 			FROM courses c
 			INNER JOIN curriculum_courses rc ON c.course_id = rc.course_id
-			WHERE rc.regulation_id = ? AND rc.semester_id = ?
-			ORDER BY c.course_code`, regulationID, semID)
+			WHERE rc.curriculum_id = ? AND rc.semester_id = ?
+			ORDER BY c.course_code`, curriculumID, semID)
 
 		if courseRows != nil {
 			defer courseRows.Close()
@@ -378,7 +378,7 @@ const latexTemplate = `\documentclass[12pt,a4paper]{article}
 % Curriculum
 \section{Curriculum}
 {{range .Semesters}}
-\subsection{Semester {{.SemesterNumber}}}
+\subsection{Semester {{.Number}}}
 \begin{longtable}{|p{2cm}|p{4cm}|c|c|c|c|c|c|c|c|p{2cm}|}
 \hline
 \textbf{Code} & \textbf{Course} & \textbf{L} & \textbf{T} & \textbf{P} & \textbf{C} & \textbf{Hrs/Wk} & \textbf{CIA} & \textbf{SEE} & \textbf{Total} & \textbf{Category} \\ \hline

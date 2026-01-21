@@ -194,7 +194,7 @@ func SaveCourseMapping(w http.ResponseWriter, r *http.Request) {
 	var curriculumID int
 	var courseName string
 	db.DB.QueryRow(`
-		SELECT rc.regulation_id, c.course_name 
+		SELECT rc.curriculum_id, c.course_name 
 		FROM curriculum_courses rc 
 		JOIN courses c ON rc.course_id = c.course_id 
 		WHERE rc.course_id = ? LIMIT 1

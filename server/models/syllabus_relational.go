@@ -11,7 +11,7 @@ type SyllabusModel struct {
 }
 
 // SyllabusTitle represents a title under a model with hours
-// Links to syllabus_models via model_id
+// Links to syllabus via model_id
 type SyllabusTitle struct {
 	ID        int             `json:"id"`
 	ModelID   int             `json:"model_id"`

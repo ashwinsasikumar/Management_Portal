@@ -66,7 +66,7 @@ function SharingManagementPage() {
 
   const fetchSharingInfo = async (regulationId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${regulationId}/sharing`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${regulationId}/sharing`)
       if (!response.ok) {
         throw new Error('Failed to fetch sharing info')
       }

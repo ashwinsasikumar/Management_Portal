@@ -3,13 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
-
 	"server/db"
 	"server/models"
+	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -20,15 +20,15 @@ func GetSemesters(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
-	query := "SELECT id, regulation_id, semester_number, COALESCE(card_type, 'semester') as card_type FROM normal_cards WHERE regulation_id = ? ORDER BY COALESCE(semester_number, 999), id"
-	rows, err := db.DB.Query(query, regulationID)
+	query := "SELECT id, curriculum_id, semester_number, COALESCE(card_type, 'semester') as card_type FROM normal_cards WHERE curriculum_id = ? ORDER BY COALESCE(semester_number, 999), id"
+	rows, err := db.DB.Query(query, curriculumID)
 	if err != nil {
 		log.Println("Error querying semesters:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -41,7 +41,7 @@ func GetSemesters(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var sem models.Semester
 		var semesterNum sql.NullInt64
-		err := rows.Scan(&sem.ID, &sem.RegulationID, &semesterNum, &sem.CardType)
+		err := rows.Scan(&sem.ID, &sem.CurriculumID, &semesterNum, &sem.CardType)
 		if err != nil {
 			log.Println("Error scanning semester:", err)
 			continue
@@ -69,15 +69,15 @@ func CreateSemester(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
-	var sem models.Semester
-	err = json.NewDecoder(r.Body).Decode(&sem)
+	var card models.Semester
+	err = json.NewDecoder(r.Body).Decode(&card)
 	if err != nil {
 		log.Println("Error decoding request body:", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -85,10 +85,40 @@ func CreateSemester(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sem.RegulationID = regulationID
+	card.CurriculumID = curriculumID
 
-	query := "INSERT INTO normal_cards (regulation_id, semester_number, card_type) VALUES (?, ?, ?)"
-	result, err := db.DB.Exec(query, sem.RegulationID, sem.SemesterNumber, sem.CardType)
+	// Set default card type if not provided
+	if card.CardType == "" {
+		card.CardType = "semester"
+	}
+
+	// Check if the number already exists within the same card type
+	// Semester numbers must be unique among semester cards
+	// Vertical numbers must be unique among vertical cards
+	if card.SemesterNumber != nil {
+		var existingCount int
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM normal_cards WHERE curriculum_id = ? AND semester_number = ? AND card_type = ?",
+			curriculumID, *card.SemesterNumber, card.CardType).Scan(&existingCount)
+		if err != nil {
+			log.Println("Error checking for duplicate number:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to validate number"})
+			return
+		}
+		if existingCount > 0 {
+			if card.CardType == "vertical" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Vertical %d already exists in this curriculum", *card.SemesterNumber)})
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Semester %d already exists in this curriculum", *card.SemesterNumber)})
+			}
+			return
+		}
+	}
+
+	query := "INSERT INTO normal_cards (curriculum_id, semester_number, card_type) VALUES (?, ?, ?)"
+	result, err := db.DB.Exec(query, card.CurriculumID, card.SemesterNumber, card.CardType)
 	if err != nil {
 		log.Println("Error inserting semester:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -97,24 +127,24 @@ func CreateSemester(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, _ := result.LastInsertId()
-	sem.ID = int(id)
+	card.ID = int(id)
 
 	// Log the activity
 	logName := ""
-	if sem.SemesterNumber != nil {
-		cardTypeLabel := sem.CardType
+	if card.SemesterNumber != nil {
+		cardTypeLabel := card.CardType
 		if cardTypeLabel == "" {
 			cardTypeLabel = "semester"
 		}
-		logName = strings.Title(cardTypeLabel) + " " + strconv.Itoa(*sem.SemesterNumber)
+		logName = strings.Title(cardTypeLabel) + " " + strconv.Itoa(*card.SemesterNumber)
 	} else {
 		logName = "New Card"
 	}
-	LogCurriculumActivity(regulationID, "Card Added",
+	LogCurriculumActivity(curriculumID, "Card Added",
 		"Added "+logName, "System")
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(sem)
+	json.NewEncoder(w).Encode(card)
 }
 
 // DeleteSemester deletes a semester
@@ -163,10 +193,10 @@ func GetSemesterCourses(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
@@ -177,20 +207,21 @@ func GetSemesterCourses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	curriculumTemplate := getCurriculumTemplateByRegulation(regulationID)
+	curriculumTemplate := getCurriculumTemplateByRegulation(curriculumID)
 
 	query := `
 		SELECT c.course_id, c.course_code, c.course_name, c.course_type, c.category, c.credit, 
-		       c.theory_hours, c.activity_hours, c.lecture_hours, c.tutorial_hours, c.practical_hours, 
-		       c.cia_marks, c.see_marks, c.total_marks, c.total_hours,
+		       c.lecture_hrs, c.tutorial_hrs, c.practical_hrs, c.activity_hrs, COALESCE(c.` + "`tw/sl`" + `, 0) as tw_sl,
+		       COALESCE(c.theory_total_hrs, 0), COALESCE(c.tutorial_total_hrs, 0), COALESCE(c.practical_total_hrs, 0), COALESCE(c.activity_total_hrs, 0), COALESCE(c.total_hrs, 0),
+		       c.cia_marks, c.see_marks, c.total_marks,
 		       rc.id as reg_course_id
 		FROM courses c
 		INNER JOIN curriculum_courses rc ON c.course_id = rc.course_id
-		WHERE rc.regulation_id = ? AND rc.semester_id = ?
+		WHERE rc.curriculum_id = ? AND rc.semester_id = ? AND rc.status = 1 AND c.status = 1
 		ORDER BY c.course_code
 	`
 
-	rows, err := db.DB.Query(query, regulationID, semesterID)
+	rows, err := db.DB.Query(query, curriculumID, semesterID)
 	if err != nil {
 		log.Println("Error querying courses:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -203,8 +234,9 @@ func GetSemesterCourses(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var course models.CourseWithDetails
 		err := rows.Scan(&course.CourseID, &course.CourseCode, &course.CourseName, &course.CourseType, &course.Category, &course.Credit,
-			&course.TheoryHours, &course.ActivityHours, &course.LectureHours, &course.TutorialHours, &course.PracticalHours,
-			&course.CIAMarks, &course.SEEMarks, &course.TotalMarks, &course.TotalHours,
+			&course.LectureHrs, &course.TutorialHrs, &course.PracticalHrs, &course.ActivityHrs, &course.TwSlHrs,
+			&course.TheoryTotalHrs, &course.TutorialTotalHrs, &course.PracticalTotalHrs, &course.ActivityTotalHrs, &course.TotalHrs,
+			&course.CIAMarks, &course.SEEMarks, &course.TotalMarks,
 			&course.RegCourseID)
 		if err != nil {
 			log.Println("Error scanning course:", err)
@@ -230,10 +262,10 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
@@ -255,7 +287,7 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 
 	// Get curriculum's max_credits
 	var maxCredits int
-	err = db.DB.QueryRow("SELECT max_credits FROM curriculum WHERE id = ?", regulationID).Scan(&maxCredits)
+	err = db.DB.QueryRow("SELECT max_credits FROM curriculum WHERE id = ? AND status = 1", curriculumID).Scan(&maxCredits)
 	if err != nil {
 		log.Println("Error fetching curriculum max_credits:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -267,8 +299,8 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 	var currentCredits sql.NullInt64
 	creditQuery := `SELECT SUM(c.credit) FROM courses c 
 	                INNER JOIN curriculum_courses rc ON c.course_id = rc.course_id 
-	                WHERE rc.regulation_id = ?`
-	err = db.DB.QueryRow(creditQuery, regulationID).Scan(&currentCredits)
+	                WHERE rc.curriculum_id = ?`
+	err = db.DB.QueryRow(creditQuery, curriculumID).Scan(&currentCredits)
 	if err != nil {
 		log.Println("Error calculating current credits:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -288,6 +320,22 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get curriculum template
+	var curriculumTemplate string
+	err = db.DB.QueryRow("SELECT curriculum_template FROM curriculum WHERE id = ? AND status = 1", curriculumID).Scan(&curriculumTemplate)
+	if err != nil {
+		log.Println("Error fetching curriculum template:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch curriculum template"})
+		return
+	}
+
+	// Use total hours from frontend (already calculated)
+	theoryTotal := course.TheoryTotalHrs
+	tutorialTotal := course.TutorialTotalHrs
+	practicalTotal := course.PracticalTotalHrs
+	activityTotal := course.ActivityTotalHrs
+
 	// Check if course already exists
 	var existingCourseID int
 	checkQuery := "SELECT course_id FROM courses WHERE course_code = ?"
@@ -295,12 +343,16 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 
 	var courseID int
 	if err == sql.ErrNoRows {
-		// Insert new course (total_marks is auto-computed by database)
+		// Insert new course - calculate total hours (total_hrs and total_marks are GENERATED columns)
 		insertCourseQuery := `INSERT INTO courses (course_code, course_name, course_type, category, credit, 
-		                      theory_hours, activity_hours, lecture_hours, tutorial_hours, practical_hours, cia_marks, see_marks) 
-		                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		                      lecture_hrs, tutorial_hrs, practical_hrs, activity_hrs, ` + "`tw/sl`" + `,
+		                      theory_total_hrs, tutorial_total_hrs, practical_total_hrs, activity_total_hrs,
+		                      cia_marks, see_marks) 
+		                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		result, err := db.DB.Exec(insertCourseQuery, course.CourseCode, course.CourseName, course.CourseType, course.Category, course.Credit,
-			course.TheoryHours, course.ActivityHours, course.LectureHours, course.TutorialHours, course.PracticalHours, course.CIAMarks, course.SEEMarks)
+			course.LectureHrs, course.TutorialHrs, course.PracticalHrs, course.ActivityHrs, course.TwSlHrs,
+			theoryTotal, tutorialTotal, practicalTotal, activityTotal,
+			course.CIAMarks, course.SEEMarks)
 		if err != nil {
 			log.Println("Error inserting course:", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -315,12 +367,16 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create course"})
 		return
 	} else {
-		courseID = existingCourseID
+		// Course code already exists - return error
+		log.Printf("Course with code %s already exists (ID: %d)", course.CourseCode, existingCourseID)
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{"error": "A course with this course code already exists. Please use a different course code."})
+		return
 	}
 
-	// Link course to regulation and semester
-	linkQuery := "INSERT INTO curriculum_courses (regulation_id, semester_id, course_id) VALUES (?, ?, ?)"
-	result, err := db.DB.Exec(linkQuery, regulationID, semesterID, courseID)
+	// Link course to curriculum and semester
+	linkQuery := "INSERT INTO curriculum_courses (curriculum_id, semester_id, course_id) VALUES (?, ?, ?)"
+	result, err := db.DB.Exec(linkQuery, curriculumID, semesterID, courseID)
 	if err != nil {
 		log.Println("Error linking course:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -331,37 +387,41 @@ func AddCourseToSemester(w http.ResponseWriter, r *http.Request) {
 	regCourseID, _ := result.LastInsertId()
 	course.CourseID = courseID
 
-	// Fetch the complete course details including computed total_marks
+	// Fetch the complete course details including computed fields
 	var fullCourse models.CourseWithDetails
 	fetchQuery := `SELECT course_id, course_code, course_name, course_type, category, credit, 
-	               theory_hours, activity_hours, lecture_hours, tutorial_hours, practical_hours, cia_marks, see_marks, total_marks, total_hours 
+	               lecture_hrs, tutorial_hrs, practical_hrs, activity_hrs, COALESCE(` + "`tw/sl`" + `, 0) as tw_sl,
+	               COALESCE(theory_total_hrs, 0), COALESCE(tutorial_total_hrs, 0), COALESCE(practical_total_hrs, 0), COALESCE(activity_total_hrs, 0), COALESCE(total_hrs, 0),
+	               cia_marks, see_marks, total_marks 
 	               FROM courses WHERE course_id = ?`
 	err = db.DB.QueryRow(fetchQuery, courseID).Scan(&fullCourse.CourseID, &fullCourse.CourseCode, &fullCourse.CourseName,
 		&fullCourse.CourseType, &fullCourse.Category, &fullCourse.Credit,
-		&fullCourse.TheoryHours, &fullCourse.ActivityHours, &fullCourse.LectureHours, &fullCourse.TutorialHours, &fullCourse.PracticalHours,
+		&fullCourse.LectureHrs, &fullCourse.TutorialHrs, &fullCourse.PracticalHrs, &fullCourse.ActivityHrs, &fullCourse.TwSlHrs,
+		&fullCourse.TheoryTotalHrs, &fullCourse.TutorialTotalHrs, &fullCourse.PracticalTotalHrs, &fullCourse.ActivityTotalHrs, &fullCourse.TotalHrs,
 		&fullCourse.CIAMarks, &fullCourse.SEEMarks, &fullCourse.TotalMarks)
 	if err != nil {
 		log.Println("Error fetching full course details:", err)
 		// Fallback to sent values
 		fullCourse = models.CourseWithDetails{
-			CourseID:       courseID,
-			CourseCode:     course.CourseCode,
-			CourseName:     course.CourseName,
-			CourseType:     course.CourseType,
-			Category:       course.Category,
-			Credit:         course.Credit,
-			LectureHours:   course.LectureHours,
-			TutorialHours:  course.TutorialHours,
-			PracticalHours: course.PracticalHours,
-			CIAMarks:       course.CIAMarks,
-			SEEMarks:       course.SEEMarks,
-			TotalMarks:     course.CIAMarks + course.SEEMarks,
+			CourseID:     courseID,
+			CourseCode:   course.CourseCode,
+			CourseName:   course.CourseName,
+			CourseType:   course.CourseType,
+			Category:     course.Category,
+			Credit:       course.Credit,
+			LectureHrs:   course.LectureHrs,
+			TutorialHrs:  course.TutorialHrs,
+			PracticalHrs: course.PracticalHrs,
+			ActivityHrs:  course.ActivityHrs,
+			CIAMarks:     course.CIAMarks,
+			SEEMarks:     course.SEEMarks,
+			TotalMarks:   course.CIAMarks + course.SEEMarks,
 		}
 	}
 	fullCourse.RegCourseID = int(regCourseID)
 
 	// Log the activity
-	LogCurriculumActivity(regulationID, "Course Added",
+	LogCurriculumActivity(curriculumID, "Course Added",
 		"Added course "+course.CourseCode+" - "+course.CourseName+" to Semester "+strconv.Itoa(semesterID), "System")
 
 	w.WriteHeader(http.StatusCreated)
@@ -380,10 +440,10 @@ func RemoveCourseFromSemester(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
@@ -401,8 +461,8 @@ func RemoveCourseFromSemester(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "DELETE FROM curriculum_courses WHERE regulation_id = ? AND semester_id = ? AND course_id = ?"
-	result, err := db.DB.Exec(query, regulationID, semesterID, courseID)
+	query := "UPDATE curriculum_courses SET status = 0 WHERE curriculum_id = ? AND semester_id = ? AND course_id = ? AND status = 1"
+	result, err := db.DB.Exec(query, curriculumID, semesterID, courseID)
 	if err != nil {
 		log.Println("Error removing course:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -422,7 +482,7 @@ func RemoveCourseFromSemester(w http.ResponseWriter, r *http.Request) {
 	db.DB.QueryRow("SELECT course_name FROM courses WHERE course_id = ?", courseID).Scan(&courseName)
 
 	// Log the activity
-	LogCurriculumActivity(regulationID, "Course Removed",
+	LogCurriculumActivity(curriculumID, "Course Removed",
 		"Removed course "+courseName+" from Semester "+strconv.Itoa(semesterID), "System")
 
 	w.WriteHeader(http.StatusOK)

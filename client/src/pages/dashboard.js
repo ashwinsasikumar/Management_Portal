@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config'
 function Dashboard() {
   const navigate = useNavigate()
   const [stats, setStats] = useState({
-    totalRegulations: 0,
+    totalCurriculum: 0,
     activeCurriculum: 0,
     totalCourses: 0,
     recentActivities: 0
@@ -24,7 +24,7 @@ function Dashboard() {
       if (response.ok) {
         const data = await response.json()
         setStats({
-          totalRegulations: data.length || 0,
+          totalCurriculum: data.length || 0,
           activeCurriculum: data.length || 0,
           totalCourses: 0, // Can be calculated from all courses across semesters
           recentActivities: 0 // Can be fetched from logs API
@@ -32,7 +32,7 @@ function Dashboard() {
       } else {
         // Fallback to default values if API fails
         setStats({
-          totalRegulations: 0,
+          totalCurriculum: 0,
           activeCurriculum: 0,
           totalCourses: 0,
           recentActivities: 0
@@ -41,7 +41,7 @@ function Dashboard() {
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
       setStats({
-        totalRegulations: 0,
+        totalCurriculum: 0,
         activeCurriculum: 0,
         totalCourses: 0,
         recentActivities: 0
@@ -51,8 +51,8 @@ function Dashboard() {
 
   const statCards = [
     {
-      title: 'Total Regulations',
-      value: stats.totalRegulations,
+      title: 'Total Curriculum',
+      value: stats.totalCurriculum,
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -60,7 +60,9 @@ function Dashboard() {
       ),
       color: 'from-blue-500 to-blue-600',
       bgColor: 'bg-blue-50',
-      textColor: 'text-blue-600'
+      textColor: 'text-blue-600',
+      customColor: 'rgb(255, 195, 0)',
+      customBg: 'rgba(255, 195, 0, 0.1)'
     },
     {
       title: 'Active Curriculum',
@@ -173,14 +175,14 @@ function Dashboard() {
                   <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
                   <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
                 </div>
-                <div className={`${stat.bgColor} p-3 rounded-xl`}>
-                  <div className={stat.textColor}>
+                <div className={stat.customBg ? 'p-3 rounded-xl' : `${stat.bgColor} p-3 rounded-xl`} style={stat.customBg ? {backgroundColor: stat.customBg} : {}}>
+                  <div className={stat.customColor ? '' : stat.textColor} style={stat.customColor ? {color: stat.customColor} : {}}>
                     {stat.icon}
                   </div>
                 </div>
               </div>
               <div className="mt-4 flex items-center">
-                <div className={`w-full h-1 bg-gradient-to-r ${stat.color} rounded-full`}></div>
+                <div className={stat.customColor ? 'w-full h-1 rounded-full' : `w-full h-1 bg-gradient-to-r ${stat.color} rounded-full`} style={stat.customColor ? {backgroundColor: stat.customColor} : {}}></div>
               </div>
             </div>
           ))}
@@ -194,16 +196,37 @@ function Dashboard() {
               <button
                 key={index}
                 onClick={action.action}
-                className="flex items-start space-x-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-blue-50 hover:to-blue-100 rounded-xl transition-all duration-200 hover:scale-105 border border-gray-200 hover:border-blue-300 group"
+                className="flex items-start space-x-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl transition-all duration-200 hover:scale-105 border border-gray-200 group"
+                style={{
+                  '--hover-from': 'rgba(67, 113, 229, 0.05)',
+                  '--hover-to': 'rgba(67, 113, 229, 0.1)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(to bottom right, rgba(67, 113, 229, 0.05), rgba(67, 113, 229, 0.1))'
+                  e.currentTarget.style.borderColor = 'rgba(67, 113, 229, 0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(to bottom right, rgb(249, 250, 251), rgb(243, 244, 246))'
+                  e.currentTarget.style.borderColor = 'rgb(229, 231, 235)'
+                }}
               >
-                <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-200 shadow-sm">
+                <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg flex items-center justify-center transition-all duration-200 shadow-sm group-hover:text-white" style={{color: 'rgb(67, 113, 229)'}} onMouseEnter={(e) => {
+                  const parent = e.currentTarget.parentElement
+                  if (parent?.matches(':hover')) {
+                    e.currentTarget.style.background = 'rgb(67, 113, 229)'
+                    e.currentTarget.style.color = 'white'
+                  }
+                }} onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'white'
+                  e.currentTarget.style.color = 'rgb(67, 113, 229)'
+                }}>
                   {action.icon}
                 </div>
                 <div className="flex-1 text-left">
                   <h3 className="text-base font-semibold text-gray-900 mb-1">{action.title}</h3>
                   <p className="text-sm text-gray-600">{action.description}</p>
                 </div>
-                <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-400 transition-colors group-hover:text-[rgb(67,113,229)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -212,23 +235,24 @@ function Dashboard() {
         </div>
 
         {/* Welcome Message */}
-        <div className="card-custom p-8 bg-gradient-to-br from-blue-500 to-blue-700 text-white">
+        <div className="card-custom p-8 text-white" style={{background: 'linear-gradient(to bottom right, rgb(67, 113, 229), rgb(47, 93, 209))'}}>
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-3">Welcome to Curriculum Management System</h2>
-              <p className="text-blue-100 mb-6 max-w-2xl">
+              <p className="mb-6 max-w-2xl" style={{color: 'rgba(255, 255, 255, 0.9)'}}>
                 Streamline your academic planning with our comprehensive curriculum management platform. 
                 Create, manage, and track curriculum structures, courses, and mappings all in one place.
               </p>
               <button
                 onClick={() => navigate('/curriculum')}
-                className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                className="bg-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                style={{color: 'rgb(67, 113, 229)'}}
               >
                 Get Started
               </button>
             </div>
             <div className="hidden lg:block">
-              <svg className="w-32 h-32 text-blue-400 opacity-50" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-32 h-32 opacity-50" style={{color: 'rgba(255, 255, 255, 0.4)'}} fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
               </svg>
             </div>

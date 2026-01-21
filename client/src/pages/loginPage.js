@@ -13,7 +13,6 @@ function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -46,23 +45,23 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white flex items-center justify-center p-4" style={{backgroundImage: 'linear-gradient(to bottom right, rgba(67, 113, 229, 0.05), rgb(255, 255, 255), rgba(168, 85, 247, 0.05))'}}>
       {/* Background decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob" style={{backgroundColor: 'rgba(67, 113, 229, 0.3)'}}></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000" style={{backgroundColor: 'rgba(67, 113, 229, 0.4)'}}></div>
       </div>
 
       <div className="relative w-full max-w-md">
         {/* Logo and Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl shadow-2xl mb-6 transform hover:scale-105 transition-transform">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-2xl mb-6 transform hover:scale-105 transition-transform" style={{background: 'linear-gradient(to bottom right, rgb(67, 113, 229), rgb(47, 93, 209))'}}>
             <svg className="w-11 h-11 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-700 to-blue-900 bg-clip-text text-transparent mb-2">Curriculum Management System</h1>
+          <h1 className="text-4xl font-bold mb-2" style={{background: 'linear-gradient(to right, rgb(67, 113, 229), rgb(47, 93, 209))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>Curriculum Management System</h1>
           <p className="text-gray-600 text-base font-medium">Sign in to continue to your dashboard</p>
         </div>
 

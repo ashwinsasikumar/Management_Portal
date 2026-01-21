@@ -157,7 +157,7 @@ func fetchSelfLearning(courseID int) (*models.SelfLearning, error) {
 	// Fetch main topics
 	rows, err := db.DB.Query(`
 		SELECT id, main_text 
-		FROM course_selflearning_main 
+		FROM course_selflearning_topics 
 		WHERE course_id = ? 
 		ORDER BY position`, courseID)
 	if err != nil {
@@ -173,7 +173,7 @@ func fetchSelfLearning(courseID int) (*models.SelfLearning, error) {
 			// Fetch internal resources for this main topic
 			internalRows, err := db.DB.Query(`
 				SELECT internal_text 
-				FROM course_selflearning_internal 
+				FROM course_selflearning_resources 
 				WHERE main_id = ? 
 				ORDER BY position`, mainID)
 
@@ -350,8 +350,8 @@ func saveTeamwork(courseID int, teamwork *models.Teamwork) error {
 func saveSelfLearning(courseID int, selflearning *models.SelfLearning) error {
 	if selflearning == nil {
 		// Delete if nil
-		db.DB.Exec("DELETE FROM course_selflearning_internal WHERE main_id IN (SELECT id FROM course_selflearning_main WHERE course_id = ?)", courseID)
-		db.DB.Exec("DELETE FROM course_selflearning_main WHERE course_id = ?", courseID)
+		db.DB.Exec("DELETE FROM course_selflearning_resources WHERE main_id IN (SELECT id FROM course_selflearning_topics WHERE course_id = ?)", courseID)
+		db.DB.Exec("DELETE FROM course_selflearning_topics WHERE course_id = ?", courseID)
 		db.DB.Exec("DELETE FROM course_selflearning WHERE course_id = ?", courseID)
 		return nil
 	}
@@ -367,8 +367,8 @@ func saveSelfLearning(courseID int, selflearning *models.SelfLearning) error {
 	}
 
 	// Delete existing main topics and their internals
-	db.DB.Exec("DELETE FROM course_selflearning_internal WHERE main_id IN (SELECT id FROM course_selflearning_main WHERE course_id = ?)", courseID)
-	db.DB.Exec("DELETE FROM course_selflearning_main WHERE course_id = ?", courseID)
+	db.DB.Exec("DELETE FROM course_selflearning_resources WHERE main_id IN (SELECT id FROM course_selflearning_topics WHERE course_id = ?)", courseID)
+	db.DB.Exec("DELETE FROM course_selflearning_topics WHERE course_id = ?", courseID)
 
 	// Insert new main topics
 	for i, mainInput := range selflearning.MainInputs {
@@ -377,7 +377,7 @@ func saveSelfLearning(courseID int, selflearning *models.SelfLearning) error {
 		}
 
 		result, err := db.DB.Exec(`
-			INSERT INTO course_selflearning_main (course_id, main_text, position) 
+			INSERT INTO course_selflearning_topics (course_id, main_text, position) 
 			VALUES (?, ?, ?)`, courseID, mainInput.Main, i)
 		if err != nil {
 			return err
@@ -391,7 +391,7 @@ func saveSelfLearning(courseID int, selflearning *models.SelfLearning) error {
 				continue
 			}
 			_, err := db.DB.Exec(`
-				INSERT INTO course_selflearning_internal (main_id, internal_text, position) 
+				INSERT INTO course_selflearning_resources (main_id, internal_text, position) 
 				VALUES (?, ?, ?)`, mainID, text, j)
 			if err != nil {
 				return err

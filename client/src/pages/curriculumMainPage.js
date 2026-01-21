@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../config'
 
 function CurriculumMainPage() {
   const navigate = useNavigate()
-  const [regulations, setRegulations] = useState([])
+  const [curriculum, setCurriculum] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -20,25 +20,25 @@ function CurriculumMainPage() {
   const [editingCurriculum, setEditingCurriculum] = useState(null)
   const [editFormData, setEditFormData] = useState({ name: '', academic_year: '', max_credits: '', curriculum_template: '2026' })
 
-  // Fetch regulations from backend
+  // Fetch curriculum from backend
   useEffect(() => {
-    fetchRegulations()
+    fetchCurriculum()
   }, [])
 
-  const fetchRegulations = async () => {
+  const fetchCurriculum = async () => {
     try {
       setLoading(true)
       const response = await fetch(`${API_BASE_URL}/curriculum`)
       if (!response.ok) {
-        throw new Error('Failed to fetch regulations')
+        throw new Error('Failed to fetch curriculum')
       }
       const data = await response.json()
-      setRegulations(data || [])
+      setCurriculum(data || [])
       setError('')
     } catch (err) {
-      console.error('Error fetching regulations:', err)
-      setError('Failed to load regulations. Make sure the backend is running.')
-      setRegulations([])
+      console.error('Error fetching curriculum:', err)
+      setError('Failed to load curriculum. Make sure the backend is running.')
+      setCurriculum([])
     } finally {
       setLoading(false)
     }
@@ -68,10 +68,10 @@ function CurriculumMainPage() {
     fetchLogs(curriculumId)
   }
 
-  const handleDownloadPDF = async (e, regulationId, regulationName) => {
+  const handleDownloadPDF = async (e, curriculumId, curriculumName) => {
     e.stopPropagation()
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${regulationId}/pdf`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${curriculumId}/pdf`)
       if (!response.ok) {
         const errorText = await response.text()
         
@@ -85,7 +85,7 @@ function CurriculumMainPage() {
           
           if (useHTML) {
             // Open HTML preview in new tab
-            window.open(`${API_BASE_URL}/regulation/${regulationId}/pdf?preview=html`, '_blank')
+            window.open(`${API_BASE_URL}/curriculum/${curriculumId}/pdf?preview=html`, '_blank')
             return
           }
         }
@@ -96,7 +96,7 @@ function CurriculumMainPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${regulationName.replace(/\s+/g, '_')}.pdf`
+      a.download = `${curriculumName.replace(/\s+/g, '_')}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -107,7 +107,7 @@ function CurriculumMainPage() {
     }
   }
 
-  const handleAddRegulation = async (e) => {
+  const handleAddCurriculum = async (e) => {
     e.preventDefault()
     
     if (!formData.name.trim() || !formData.academic_year.trim()) {
@@ -128,17 +128,17 @@ function CurriculumMainPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create regulation')
+        throw new Error('Failed to create curriculum')
       }
 
       // Reset form and refresh list
       setFormData({ name: '', academic_year: '', max_credits: '', curriculum_template: '2026' })
       setShowForm(false)
       setError('')
-      fetchRegulations()
+      fetchCurriculum()
     } catch (err) {
-      console.error('Error creating regulation:', err)
-      setError('Failed to create regulation')
+      console.error('Error creating curriculum:', err)
+      setError('Failed to create curriculum')
     }
   }
 
@@ -183,15 +183,15 @@ function CurriculumMainPage() {
       setShowEditModal(false)
       setEditingCurriculum(null)
       setError('')
-      fetchRegulations()
+      fetchCurriculum()
     } catch (err) {
       console.error('Error updating curriculum:', err)
       setError('Failed to update curriculum')
     }
   }
 
-  const handleDeleteRegulation = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this regulation?')) {
+  const handleDeleteCurriculum = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this curriculum?')) {
       return
     }
 
@@ -201,14 +201,14 @@ function CurriculumMainPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete regulation')
+        throw new Error('Failed to delete curriculum')
       }
 
       setError('')
-      fetchRegulations()
+      fetchCurriculum()
     } catch (err) {
-      console.error('Error deleting regulation:', err)
-      setError('Failed to delete regulation')
+      console.error('Error deleting curriculum:', err)
+      setError('Failed to delete curriculum')
     }
   }
 
@@ -263,7 +263,7 @@ function CurriculumMainPage() {
         {showForm && (
           <div className="card-custom p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-6">Add New Curriculum</h2>
-            <form onSubmit={handleAddRegulation} className="space-y-5">
+            <form onSubmit={handleAddCurriculum} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Curriculum Name</label>
                 <input
@@ -339,28 +339,28 @@ function CurriculumMainPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <p className="text-gray-600">Loading regulations...</p>
+              <p className="text-gray-600">Loading curriculum...</p>
             </div>
           </div>
-        ) : regulations.length === 0 ? (
+        ) : curriculum.length === 0 ? (
           <div className="card-custom p-12 text-center">
             <svg className="w-20 h-20 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Regulations Yet</h3>
-            <p className="text-gray-600 mb-6">Get started by creating your first regulation</p>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Curriculum Yet</h3>
+            <p className="text-gray-600 mb-6">Get started by creating your first curriculum</p>
             <button onClick={() => setShowForm(true)} className="btn-primary-custom">
               Add Curriculum
             </button>
           </div>
         ) : (
-          /* Regulations Grid */
+          /* Curriculum Grid */
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {regulations.map(reg => (
+            {curriculum.map(reg => (
               <div 
                 key={reg.id} 
                 className="group card-custom p-6 cursor-pointer hover:scale-105 transition-all duration-200"
-                onClick={() => navigate(`/regulation/${reg.id}/overview`)}
+                onClick={() => navigate(`/curriculum/${reg.id}/overview`)}
               >
                 {/* Icon */}
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -424,7 +424,7 @@ function CurriculumMainPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleDeleteRegulation(reg.id)
+                      handleDeleteCurriculum(reg.id)
                     }}
                     title="Delete"
                     className="px-3 py-2 text-xs font-medium bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
@@ -446,7 +446,7 @@ function CurriculumMainPage() {
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-5 flex items-start justify-between">
               <div>
                 <h3 className="text-2xl font-bold mb-1">Activity Timeline</h3>
-                <p className="text-sm text-blue-100">Regulation ID: {selectedCurriculumId}</p>
+                <p className="text-sm text-blue-100">Curriculum ID: {selectedCurriculumId}</p>
               </div>
               <button 
                 onClick={() => setShowLogsModal(false)}
@@ -702,7 +702,7 @@ function CurriculumMainPage() {
                   type="submit"
                   className="bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
                 >
-                  Update Regulation
+                  Update Curriculum
                 </button>
               </div>
             </form>

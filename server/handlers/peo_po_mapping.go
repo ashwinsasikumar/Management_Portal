@@ -12,20 +12,20 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// GetPEOPOMapping handles GET /regulation/:id/peo-po-mapping
+// GetPEOPOMapping handles GET /curriculum/:id/peo-po-mapping
 func GetPEOPOMapping(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		http.Error(w, "Invalid regulation ID", http.StatusBadRequest)
+		http.Error(w, "Invalid curriculum ID", http.StatusBadRequest)
 		return
 	}
 
 	// Fetch existing PEO-PO mappings
 	matrix := make(map[string]int)
-	rows, err := db.DB.Query("SELECT peo_index, po_index, mapping_value FROM peo_po_mapping WHERE regulation_id = ?", regulationID)
+	rows, err := db.DB.Query("SELECT peo_index, po_index, mapping_value FROM peo_po_mapping WHERE curriculum_id = ?", curriculumID)
 	if err != nil {
 		log.Println("Error fetching PEO-PO mappings:", err)
 		http.Error(w, "Failed to fetch mappings", http.StatusInternalServerError)
@@ -49,14 +49,14 @@ func GetPEOPOMapping(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// SavePEOPOMapping handles POST /regulation/:id/peo-po-mapping
+// SavePEOPOMapping handles POST /curriculum/:id/peo-po-mapping
 func SavePEOPOMapping(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		http.Error(w, "Invalid regulation ID", http.StatusBadRequest)
+		http.Error(w, "Invalid curriculum ID", http.StatusBadRequest)
 		return
 	}
 
@@ -76,8 +76,8 @@ func SavePEOPOMapping(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Delete existing mappings for this regulation
-	_, err = tx.Exec("DELETE FROM peo_po_mapping WHERE regulation_id = ?", regulationID)
+	// Delete existing mappings for this curriculum
+	_, err = tx.Exec("DELETE FROM peo_po_mapping WHERE curriculum_id = ?", curriculumID)
 	if err != nil {
 		log.Println("Error deleting existing mappings:", err)
 		http.Error(w, "Failed to save mappings", http.StatusInternalServerError)
@@ -87,9 +87,9 @@ func SavePEOPOMapping(w http.ResponseWriter, r *http.Request) {
 	// Insert new mappings
 	for _, mapping := range request.Mappings {
 		_, err = tx.Exec(`
-			INSERT INTO peo_po_mapping (regulation_id, peo_index, po_index, mapping_value)
+			INSERT INTO peo_po_mapping (curriculum_id, peo_index, po_index, mapping_value)
 			VALUES (?, ?, ?, ?)
-		`, regulationID, mapping.PEOIndex, mapping.POIndex, mapping.MappingValue)
+		`, curriculumID, mapping.PEOIndex, mapping.POIndex, mapping.MappingValue)
 		if err != nil {
 			log.Println("Error inserting PEO-PO mapping:", err)
 			http.Error(w, "Failed to save mappings", http.StatusInternalServerError)
@@ -105,7 +105,7 @@ func SavePEOPOMapping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log the activity
-	LogCurriculumActivity(regulationID, "PEO-PO Mapping Saved",
+	LogCurriculumActivity(curriculumID, "PEO-PO Mapping Saved",
 		"Updated PEO-PO mappings for the curriculum", "System")
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "PEO-PO mappings saved successfully"})

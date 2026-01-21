@@ -19,15 +19,15 @@ func GetHonourCards(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
-	query := "SELECT id, regulation_id, title, semester_number FROM honour_cards WHERE regulation_id = ? ORDER BY semester_number"
-	rows, err := db.DB.Query(query, regulationID)
+	query := "SELECT id, curriculum_id, title FROM honour_cards WHERE curriculum_id = ? AND status = 1 ORDER BY id"
+	rows, err := db.DB.Query(query, curriculumID)
 	if err != nil {
 		log.Println("Error querying honour cards:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -39,7 +39,7 @@ func GetHonourCards(w http.ResponseWriter, r *http.Request) {
 	var honourCards []models.HonourCardWithVerticals = make([]models.HonourCardWithVerticals, 0)
 	for rows.Next() {
 		var card models.HonourCardWithVerticals
-		err := rows.Scan(&card.ID, &card.RegulationID, &card.Title, &card.SemesterNumber)
+		err := rows.Scan(&card.ID, &card.CurriculumID, &card.Title)
 		if err != nil {
 			log.Println("Error scanning honour card:", err)
 			continue
@@ -56,7 +56,7 @@ func GetHonourCards(w http.ResponseWriter, r *http.Request) {
 
 // fetchVerticalsForCard retrieves all verticals and their courses for a given honour card
 func fetchVerticalsForCard(honourCardID int) []models.HonourVerticalWithCourses {
-	query := "SELECT id, honour_card_id, name FROM honour_verticals WHERE honour_card_id = ? ORDER BY id"
+	query := "SELECT id, honour_card_id, name FROM honour_verticals WHERE honour_card_id = ? AND status = 1 ORDER BY id"
 	rows, err := db.DB.Query(query, honourCardID)
 	if err != nil {
 		log.Println("Error querying verticals:", err)
@@ -85,12 +85,13 @@ func fetchVerticalsForCard(honourCardID int) []models.HonourVerticalWithCourses 
 func fetchCoursesForVertical(verticalID int) []models.CourseWithDetails {
 	query := `
 		SELECT c.course_id, c.course_code, c.course_name, c.course_type, c.category, 
-		       c.credit, c.theory_hours, c.activity_hours, c.lecture_hours, c.tutorial_hours, 
-		       c.practical_hours, c.total_hours, c.cia_marks, c.see_marks, c.total_marks,
+		       c.credit, c.lecture_hrs, c.tutorial_hrs, c.practical_hrs, c.activity_hrs, COALESCE(c.` + "`tw/sl`" + `, 0) as tw_sl,
+		       COALESCE(c.theory_total_hrs, 0), COALESCE(c.tutorial_total_hrs, 0), COALESCE(c.practical_total_hrs, 0), COALESCE(c.activity_total_hrs, 0), COALESCE(c.total_hrs, 0),
+		       c.cia_marks, c.see_marks, c.total_marks,
 		       hvc.id as honour_vertical_course_id
 		FROM courses c
 		INNER JOIN honour_vertical_courses hvc ON c.course_id = hvc.course_id
-		WHERE hvc.honour_vertical_id = ?
+		WHERE hvc.honour_vertical_id = ? AND hvc.status = 1 AND c.status = 1
 		ORDER BY c.course_code
 	`
 	rows, err := db.DB.Query(query, verticalID)
@@ -105,9 +106,9 @@ func fetchCoursesForVertical(verticalID int) []models.CourseWithDetails {
 		var course models.CourseWithDetails
 		err := rows.Scan(
 			&course.CourseID, &course.CourseCode, &course.CourseName, &course.CourseType,
-			&course.Category, &course.Credit, &course.TheoryHours, &course.ActivityHours,
-			&course.LectureHours, &course.TutorialHours, &course.PracticalHours,
-			&course.TotalHours, &course.CIAMarks, &course.SEEMarks, &course.TotalMarks,
+			&course.Category, &course.Credit, &course.LectureHrs, &course.TutorialHrs, &course.PracticalHrs, &course.ActivityHrs, &course.TwSlHrs,
+			&course.TheoryTotalHrs, &course.TutorialTotalHrs, &course.PracticalTotalHrs, &course.ActivityTotalHrs, &course.TotalHrs,
+			&course.CIAMarks, &course.SEEMarks, &course.TotalMarks,
 			&course.RegCourseID,
 		)
 		if err != nil {
@@ -132,10 +133,10 @@ func CreateHonourCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	regulationID, err := strconv.Atoi(vars["id"])
+	curriculumID, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid regulation ID"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid curriculum ID"})
 		return
 	}
 
@@ -148,10 +149,10 @@ func CreateHonourCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	card.RegulationID = regulationID
+	card.CurriculumID = curriculumID
 
-	query := "INSERT INTO honour_cards (regulation_id, title, semester_number) VALUES (?, ?, ?)"
-	result, err := db.DB.Exec(query, card.RegulationID, card.Title, card.SemesterNumber)
+	query := "INSERT INTO honour_cards (curriculum_id, title) VALUES (?, ?)"
+	result, err := db.DB.Exec(query, card.CurriculumID, card.Title)
 	if err != nil {
 		log.Println("Error inserting honour card:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -163,7 +164,7 @@ func CreateHonourCard(w http.ResponseWriter, r *http.Request) {
 	card.ID = int(id)
 
 	// Log the activity
-	LogCurriculumActivity(regulationID, "Honour Card Added",
+	LogCurriculumActivity(curriculumID, "Honour Card Added",
 		"Added Honour Card: "+card.Title, "System")
 
 	w.WriteHeader(http.StatusCreated)
@@ -239,19 +240,23 @@ func AddCourseToVertical(w http.ResponseWriter, r *http.Request) {
 	// 1) By existing course_id (legacy behaviour)
 	// 2) By full course details (same as normal card flow)
 	var payload struct {
-		CourseID       *int   `json:"course_id,omitempty"`
-		CourseCode     string `json:"course_code,omitempty"`
-		CourseName     string `json:"course_name,omitempty"`
-		CourseType     string `json:"course_type,omitempty"`
-		Category       string `json:"category,omitempty"`
-		Credit         int    `json:"credit,omitempty"`
-		TheoryHours    int    `json:"theory_hours,omitempty"`
-		ActivityHours  int    `json:"activity_hours,omitempty"`
-		LectureHours   int    `json:"lecture_hours,omitempty"`
-		TutorialHours  int    `json:"tutorial_hours,omitempty"`
-		PracticalHours int    `json:"practical_hours,omitempty"`
-		CIAMarks       int    `json:"cia_marks,omitempty"`
-		SEEMarks       int    `json:"see_marks,omitempty"`
+		CourseID          *int   `json:"course_id,omitempty"`
+		CourseCode        string `json:"course_code,omitempty"`
+		CourseName        string `json:"course_name,omitempty"`
+		CourseType        string `json:"course_type,omitempty"`
+		Category          string `json:"category,omitempty"`
+		Credit            int    `json:"credit,omitempty"`
+		LectureHrs        int    `json:"lecture_hrs,omitempty"`
+		TutorialHrs       int    `json:"tutorial_hrs,omitempty"`
+		PracticalHrs      int    `json:"practical_hrs,omitempty"`
+		ActivityHrs       int    `json:"activity_hrs,omitempty"`
+		TwSlHrs           int    `json:"tw_sl_hrs,omitempty"`
+		TheoryTotalHrs    int    `json:"theory_total_hrs,omitempty"`
+		TutorialTotalHrs  int    `json:"tutorial_total_hrs,omitempty"`
+		PracticalTotalHrs int    `json:"practical_total_hrs,omitempty"`
+		ActivityTotalHrs  int    `json:"activity_total_hrs,omitempty"`
+		CIAMarks          int    `json:"cia_marks,omitempty"`
+		SEEMarks          int    `json:"see_marks,omitempty"`
 	}
 
 	err = json.NewDecoder(r.Body).Decode(&payload)
@@ -260,6 +265,21 @@ func AddCourseToVertical(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
 		return
+	}
+
+	// Get curriculum ID and template from vertical
+	var curriculumID int
+	var curriculumTemplate string
+	err = db.DB.QueryRow(`
+		SELECT hc.curriculum_id, c.curriculum_template 
+		FROM honour_verticals hv
+		INNER JOIN honour_cards hc ON hv.honour_card_id = hc.id
+		INNER JOIN curriculum c ON hc.curriculum_id = c.id
+		WHERE hv.id = ?`, verticalID).Scan(&curriculumID, &curriculumTemplate)
+	if err != nil {
+		log.Println("Error fetching curriculum template for vertical:", err)
+		// Don't fail, just use default calculation
+		curriculumTemplate = "2022"
 	}
 
 	var courseID int
@@ -283,6 +303,12 @@ func AddCourseToVertical(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Use total hours from frontend (already calculated)
+		theoryTotal := payload.TheoryTotalHrs
+		tutorialTotal := payload.TutorialTotalHrs
+		practicalTotal := payload.PracticalTotalHrs
+		activityTotal := payload.ActivityTotalHrs
+
 		// Check if course already exists by course_code
 		var existingCourseID int
 		checkQuery := "SELECT course_id FROM courses WHERE course_code = ?"
@@ -290,19 +316,25 @@ func AddCourseToVertical(w http.ResponseWriter, r *http.Request) {
 		if err == sql.ErrNoRows {
 			// Insert new course
 			insertCourseQuery := `INSERT INTO courses (course_code, course_name, course_type, category, credit,
-				theory_hours, activity_hours, lecture_hours, tutorial_hours, practical_hours, cia_marks, see_marks)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+				lecture_hrs, tutorial_hrs, practical_hrs, activity_hrs, ` + "`tw/sl`" + `,
+				theory_total_hrs, tutorial_total_hrs, practical_total_hrs, activity_total_hrs,
+				cia_marks, see_marks)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 			result, err := db.DB.Exec(insertCourseQuery,
 				payload.CourseCode,
 				payload.CourseName,
 				payload.CourseType,
 				payload.Category,
 				payload.Credit,
-				payload.TheoryHours,
-				payload.ActivityHours,
-				payload.LectureHours,
-				payload.TutorialHours,
-				payload.PracticalHours,
+				payload.LectureHrs,
+				payload.TutorialHrs,
+				payload.PracticalHrs,
+				payload.ActivityHrs,
+				payload.TwSlHrs,
+				theoryTotal,
+				tutorialTotal,
+				practicalTotal,
+				activityTotal,
 				payload.CIAMarks,
 				payload.SEEMarks,
 			)
@@ -369,7 +401,7 @@ func RemoveCourseFromVertical(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "DELETE FROM honour_vertical_courses WHERE honour_vertical_id = ? AND course_id = ?"
+	query := "UPDATE honour_vertical_courses SET status = 0 WHERE honour_vertical_id = ? AND course_id = ? AND status = 1"
 	result, err := db.DB.Exec(query, verticalID, courseID)
 	if err != nil {
 		log.Println("Error removing course from vertical:", err)
@@ -408,7 +440,7 @@ func DeleteHonourVertical(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "DELETE FROM honour_verticals WHERE id = ?"
+	query := "UPDATE honour_verticals SET status = 0 WHERE id = ? AND status = 1"
 	result, err := db.DB.Exec(query, verticalID)
 	if err != nil {
 		log.Println("Error deleting vertical:", err)
@@ -447,7 +479,7 @@ func DeleteHonourCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "DELETE FROM honour_cards WHERE id = ?"
+	query := "UPDATE honour_cards SET status = 0 WHERE id = ? AND status = 1"
 	result, err := db.DB.Exec(query, cardID)
 	if err != nil {
 		log.Println("Error deleting honour card:", err)

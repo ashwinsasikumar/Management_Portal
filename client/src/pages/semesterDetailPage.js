@@ -21,14 +21,11 @@ function SemesterDetailPage() {
     course_type: '',
     category: '',
     credit: '',
-    lecture_hours: 0,
-    theory_per_week: 0,
-    theory_hours: 0,
-    practical_per_week: 0,
-    practical_hours: 0,
-    activity_hours: 0,
-    tutorial_hours: 0,
-    total_hours: 0,
+    lecture_hrs: 0,
+    tutorial_hrs: 0,
+    practical_hrs: 0,
+    activity_hrs: 0,
+    tw_sl_hrs: 0,
     cia_marks: 40,
     see_marks: 60
   })
@@ -40,14 +37,11 @@ function SemesterDetailPage() {
     course_type: '',
     category: '',
     credit: '',
-    lecture_hours: 0,
-    theory_per_week: 0,
-    theory_hours: 0,
-    practical_per_week: 0,
-    practical_hours: 0,
-    activity_hours: 0,
-    tutorial_hours: 0,
-    total_hours: 0,
+    lecture_hrs: 0,
+    tutorial_hrs: 0,
+    practical_hrs: 0,
+    activity_hrs: 0,
+    tw_sl_hrs: 0,
     cia_marks: 40,
     see_marks: 60
   })
@@ -78,7 +72,7 @@ function SemesterDetailPage() {
 
   const fetchSemester = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/semesters`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/semesters`)
       if (!response.ok) {
         throw new Error('Failed to fetch semester info')
       }
@@ -93,7 +87,7 @@ function SemesterDetailPage() {
   const fetchCourses = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/semester/${semId}/courses`)
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/semester/${semId}/courses`)
       if (!response.ok) {
         throw new Error('Failed to fetch courses')
       }
@@ -112,23 +106,48 @@ function SemesterDetailPage() {
     e.preventDefault()
     
     try {
+      const lectureHrs = parseInt(newCourse.lecture_hrs) || 0
+      const tutorialHrs = parseInt(newCourse.tutorial_hrs) || 0
+      const practicalHrs = parseInt(newCourse.practical_hrs) || 0
+      const activityHrs = parseInt(newCourse.activity_hrs) || 0
+      
       const courseData = {
         ...newCourse,
         credit: parseInt(newCourse.credit),
-        theory_hours: parseInt(newCourse.theory_hours) || 0,
-        lecture_hours: parseInt(newCourse.lecture_hours) || 0,
-        tutorial_hours: parseInt(newCourse.tutorial_hours) || 0,
-        practical_hours: parseInt(newCourse.practical_hours) || 0,
+        lecture_hrs: lectureHrs,
+        tutorial_hrs: tutorialHrs,
+        practical_hrs: practicalHrs,
+        activity_hrs: activityHrs,
+        tw_sl_hrs: parseInt(newCourse.tw_sl_hrs) || 0,
         cia_marks: parseInt(newCourse.cia_marks) || 40,
         see_marks: parseInt(newCourse.see_marks) || 60
       }
       
-      // Only include activity_hours for 2026 curriculum
-      if (curriculumTemplate !== '2022') {
-        courseData.activity_hours = parseInt(newCourse.activity_hours) || 0
+      // Calculate total hours based on course type
+      if (newCourse.course_type === 'Lab') {
+        courseData.theory_total_hrs = 0
+        courseData.tutorial_total_hrs = 0
+        courseData.activity_total_hrs = 0
+        courseData.practical_total_hrs = practicalHrs * 15
+      } else if (newCourse.course_type === 'Theory') {
+        courseData.theory_total_hrs = lectureHrs * 15
+        courseData.tutorial_total_hrs = tutorialHrs * 15
+        courseData.activity_total_hrs = activityHrs * 15
+        courseData.practical_total_hrs = 0
+      } else if (newCourse.course_type === 'Theory&Lab') {
+        courseData.theory_total_hrs = lectureHrs * 15
+        courseData.tutorial_total_hrs = tutorialHrs * 15
+        courseData.practical_total_hrs = practicalHrs * 15
+        courseData.activity_total_hrs = 0
+      } else {
+        // Default: calculate all
+        courseData.theory_total_hrs = lectureHrs * 15
+        courseData.tutorial_total_hrs = tutorialHrs * 15
+        courseData.practical_total_hrs = practicalHrs * 15
+        courseData.activity_total_hrs = activityHrs * 15
       }
       
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/semester/${semId}/course`, {
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/semester/${semId}/course`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,14 +166,11 @@ function SemesterDetailPage() {
         course_type: '',
         category: '',
         credit: '',
-        lecture_hours: 0,
-        theory_per_week: 0,
-        theory_hours: 0,
-        practical_per_week: 0,
-        practical_hours: 0,
-        activity_hours: 0,
-        tutorial_hours: 0,
-        total_hours: 0,
+        lecture_hrs: 0,
+        tutorial_hrs: 0,
+        practical_hrs: 0,
+        activity_hrs: 0,
+        tw_sl_hrs: 0,
         cia_marks: 40,
         see_marks: 60
       })
@@ -171,20 +187,20 @@ function SemesterDetailPage() {
 
   const handleEditCourse = (course) => {
     setEditingCourse(course)
+    
     setEditCourseData({
       course_code: course.course_code,
       course_name: course.course_name,
       course_type: course.course_type,
       category: course.category,
       credit: course.credit,
-      lecture_hours: course.lecture_hours,
-      theory_hours: course.theory_hours,
-      practical_hours: course.practical_hours,
-      activity_hours: course.activity_hours,
-      tutorial_hours: course.tutorial_hours,
-      tws_sl_hours: course.tws_sl_hours || 0,
-      total_hours: course.total_hours,
-      cee_marks: course.see_marks
+      lecture_hrs: course.lecture_hrs || 0,
+      tutorial_hrs: course.tutorial_hrs || 0,
+      practical_hrs: course.practical_hrs || 0,
+      activity_hrs: course.activity_hrs || 0,
+      tw_sl_hrs: course.tw_sl_hrs || 0,
+      cia_marks: course.cia_marks || 40,
+      see_marks: course.see_marks || 60
     })
     setShowEditModal(true)
   }
@@ -196,17 +212,13 @@ function SemesterDetailPage() {
       const courseData = {
         ...editCourseData,
         credit: parseInt(editCourseData.credit),
-        theory_hours: parseInt(editCourseData.theory_hours) || 0,
-        lecture_hours: parseInt(editCourseData.lecture_hours) || 0,
-        tutorial_hours: parseInt(editCourseData.tutorial_hours) || 0,
-        practical_hours: parseInt(editCourseData.practical_hours) || 0,
+        lecture_hrs: parseInt(editCourseData.lecture_hrs) || 0,
+        tutorial_hrs: parseInt(editCourseData.tutorial_hrs) || 0,
+        practical_hrs: parseInt(editCourseData.practical_hrs) || 0,
+        activity_hrs: parseInt(editCourseData.activity_hrs) || 0,
+        tw_sl_hrs: parseInt(editCourseData.tw_sl_hrs) || 0,
         cia_marks: parseInt(editCourseData.cia_marks) || 40,
         see_marks: parseInt(editCourseData.see_marks) || 60
-      }
-      
-      // Only include activity_hours for 2026 curriculum
-      if (curriculumTemplate !== '2022') {
-        courseData.activity_hours = parseInt(editCourseData.activity_hours) || 0
       }
       
       const response = await fetch(`${API_BASE_URL}/course/${editingCourse.id}`, {
@@ -238,7 +250,7 @@ function SemesterDetailPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/regulation/${id}/semester/${semId}/course/${courseId}`, {
+      const response = await fetch(`${API_BASE_URL}/curriculum/${id}/semester/${semId}/course/${courseId}`, {
         method: 'DELETE',
       })
 
@@ -276,7 +288,7 @@ function SemesterDetailPage() {
       title={`Semester ${semester?.semester_number || semId} - Courses`}
       subtitle={
         <div className="flex items-center space-x-4">
-          <span>Regulation ID: {id}</span>
+          <span>Curriculum ID: {id}</span>
           {curriculum && (
             <span className="text-blue-600 font-semibold">
               Total Credits: {courses.reduce((sum, c) => sum + c.credit, 0)} / {curriculum.max_credits || 0}
@@ -287,7 +299,7 @@ function SemesterDetailPage() {
       actions={
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigate(`/regulation/${id}/curriculum`)}
+            onClick={() => navigate(`/curriculum/${id}/curriculum`)}
             className="btn-secondary-custom flex items-center space-x-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -367,7 +379,8 @@ function SemesterDetailPage() {
                 >
                   <option value="">Select Type</option>
                   <option value="Theory">Theory</option>
-                  <option value="Experiment">Experiment</option>
+                  <option value="Lab">Lab</option>
+                  <option value="Theory&Lab">Theory&Lab</option>
                 </select>
               </div>
 
@@ -403,50 +416,56 @@ function SemesterDetailPage() {
               </div>
 
               {/* Common Fields - Hours per week */}
+              {!(curriculumTemplate === '2022' && newCourse.course_type === 'Lab') && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Lecture (hrs per week) *</label>
                 <input
                   type="number"
-                  value={newCourse.lecture_hours}
-                  onChange={(e) => setNewCourse({ ...newCourse, lecture_hours: e.target.value })}
+                  value={newCourse.lecture_hrs}
+                  onChange={(e) => setNewCourse({ ...newCourse, lecture_hrs: e.target.value })}
                   placeholder="0"
                   required
                   min="0"
                   className="input-custom"
                 />
               </div>
+              )}
 
+              {!(curriculumTemplate === '2022' && newCourse.course_type === 'Lab') && (
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Theory (hrs per week)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Tutorial (hrs per week)</label>
                 <input
                   type="number"
-                  value={newCourse.theory_per_week}
-                  onChange={(e) => setNewCourse({ ...newCourse, theory_per_week: e.target.value })}
+                  value={newCourse.tutorial_hrs}
+                  onChange={(e) => setNewCourse({ ...newCourse, tutorial_hrs: e.target.value })}
                   placeholder="0"
                   min="0"
                   className="input-custom"
                 />
               </div>
+              )}
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Practical (hrs per week)</label>
-                <input
-                  type="number"
-                  value={newCourse.practical_per_week}
-                  onChange={(e) => setNewCourse({ ...newCourse, practical_per_week: e.target.value })}
-                  placeholder="0"
-                  min="0"
-                  className="input-custom"
-                />
-              </div>
+              {newCourse.course_type !== 'Theory' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Practical (hrs per week)</label>
+                  <input
+                    type="number"
+                    value={newCourse.practical_hrs}
+                    onChange={(e) => setNewCourse({ ...newCourse, practical_hrs: e.target.value })}
+                    placeholder="0"
+                    min="0"
+                    className="input-custom"
+                  />
+                </div>
+              )}
 
               {curriculumTemplate !== '2022' && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Activity (hrs per week)</label>
                   <input
                     type="number"
-                    value={newCourse.activity_hours}
-                    onChange={(e) => setNewCourse({ ...newCourse, activity_hours: e.target.value })}
+                    value={newCourse.activity_hrs}
+                    onChange={(e) => setNewCourse({ ...newCourse, activity_hrs: e.target.value })}
                     placeholder="0"
                     min="0"
                     className="input-custom"
@@ -500,97 +519,231 @@ function SemesterDetailPage() {
                     <h3 className="text-sm font-bold text-gray-900 mb-3 mt-4 pt-4 border-t border-gray-200">Total Hours (for whole semester)</h3>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS</label>
-                    <input
-                      type="number"
-                      value={newCourse.theory_hours}
-                      onChange={(e) => setNewCourse({ ...newCourse, theory_hours: e.target.value })}
-                      placeholder="0"
-                      min="0"
-                      className="input-custom"
-                    />
-                  </div>
+                  {curriculumTemplate === '2026' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS</label>
-                    <input
-                      type="number"
-                      value={newCourse.tutorial_hours}
-                      onChange={(e) => setNewCourse({ ...newCourse, tutorial_hours: e.target.value })}
-                      placeholder="0"
-                      min="0"
-                      className="input-custom"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
 
-                  {curriculumTemplate !== '2022' && (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">ACTIVITY HOURS</label>
-                      <input
-                        type="number"
-                        value={newCourse.activity_hours}
-                        onChange={(e) => setNewCourse({ ...newCourse, activity_hours: e.target.value })}
-                        placeholder="0"
-                        min="0"
-                        className="input-custom"
-                      />
-                    </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">ACTIVITY HOURS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.activity_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15) + ((parseInt(newCourse.activity_hrs) || 0) * 15)}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15)}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
                   )}
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
-                    <input
-                      type="number"
-                      value={(parseInt(newCourse.theory_hours) || 0) + (parseInt(newCourse.tutorial_hours) || 0) + (curriculumTemplate !== '2022' ? (parseInt(newCourse.activity_hours) || 0) : 0)}
-                      readOnly
-                      className="input-custom bg-gray-100 cursor-not-allowed"
-                    />
-                  </div>
                 </>
               )}
 
-              {newCourse.course_type === 'Experiment' && (
+              {newCourse.course_type === 'Theory&Lab' && (
                 <>
                   <div className="md:col-span-2">
                     <h3 className="text-sm font-bold text-gray-900 mb-3 mt-4 pt-4 border-t border-gray-200">Total Hours (for whole semester)</h3>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS</label>
-                    <input
-                      type="number"
-                      value={newCourse.practical_hours}
-                      onChange={(e) => setNewCourse({ ...newCourse, practical_hours: e.target.value })}
-                      placeholder="0"
-                      min="0"
-                      className="input-custom"
-                    />
-                  </div>
+                  {curriculumTemplate === '2026' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      {curriculumTemplate === '2022' ? 'TWS/SL HRS' : 'TUTORIAL HOURS'}
-                    </label>
-                    <input
-                      type="number"
-                      value={newCourse.tutorial_hours}
-                      onChange={(e) => setNewCourse({ ...newCourse, tutorial_hours: e.target.value })}
-                      placeholder="0"
-                      min="0"
-                      className="input-custom"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL (Auto)</label>
-                    <input
-                      type="number"
-                      value={(parseInt(newCourse.practical_hours) || 0) + (parseInt(newCourse.tutorial_hours) || 0)}
-                      readOnly
-                      className="input-custom bg-gray-100 cursor-not-allowed"
-                    />
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15) + ((parseInt(newCourse.practical_hrs) || 0) * 15)}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.lecture_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.tutorial_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={((parseInt(newCourse.lecture_hrs) || 0) * 15) + ((parseInt(newCourse.tutorial_hrs) || 0) * 15) + ((parseInt(newCourse.practical_hrs) || 0) * 15)}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {newCourse.course_type === 'Lab' && (
+                <>
+                  <div className="md:col-span-2">
+                    <h3 className="text-sm font-bold text-gray-900 mb-3 mt-4 pt-4 border-t border-gray-200">Total Hours (for whole semester)</h3>
                   </div>
+                  
+                  {curriculumTemplate === '2026' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TW/SL HRS</label>
+                        <input
+                          type="number"
+                          value={newCourse.tw_sl_hrs}
+                          onChange={(e) => setNewCourse({ ...newCourse, tw_sl_hrs: e.target.value })}
+                          placeholder="0"
+                          min="0"
+                          className="input-custom"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={((parseInt(newCourse.practical_hrs) || 0) * 15) + (parseInt(newCourse.tw_sl_hrs) || 0)}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                        <input
+                          type="number"
+                          value={(parseInt(newCourse.practical_hrs) || 0) * 15}
+                          readOnly
+                          className="input-custom bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -622,7 +775,7 @@ function SemesterDetailPage() {
                     <th className="text-left">Type</th>
                     <th className="text-left">Category</th>
                     <th className="text-left">Credits</th>
-                    <th className="text-left">L-T-P</th>
+                    <th className="text-left">{curriculumTemplate === '2022' ? 'L-T-P' : 'L-T-P-A'}</th>
                     <th className="text-left">Marks</th>
                     <th className="text-center">Actions</th>
                   </tr>
@@ -643,7 +796,12 @@ function SemesterDetailPage() {
                         </span>
                       </td>
                       <td className="font-semibold">{course.credit}</td>
-                      <td className="font-mono text-sm">{course.lecture_hours || 0}-{course.tutorial_hours || 0}-{course.practical_hours || 0}</td>
+                      <td className="font-mono text-sm">
+                        {curriculumTemplate === '2022' 
+                          ? `${course.lecture_hrs || 0}-${course.tutorial_hrs || 0}-${course.practical_hrs || 0}`
+                          : `${course.lecture_hrs || 0}-${course.tutorial_hrs || 0}-${course.practical_hrs || 0}-${course.activity_hrs || 0}`
+                        }
+                      </td>
                       <td>
                         <div className="text-xs space-y-1">
                           <div>CIA: <span className="font-semibold">{course.cia_marks || 0}</span></div>
@@ -744,7 +902,7 @@ function SemesterDetailPage() {
                     >
                       <option value="">Select Type</option>
                       <option value="Theory">Theory</option>
-                      <option value="Experiment">Experiment</option>
+                      <option value="Lab">Lab</option>
                     </select>
                   </div>
 
@@ -782,36 +940,40 @@ function SemesterDetailPage() {
                     />
                   </div>
 
+                  {!(curriculumTemplate === '2022' && editCourseData.course_type === 'Lab') && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Lecture (hrs per week)</label>
                     <input
                       type="number"
-                      value={editCourseData.lecture_hours}
-                      onChange={(e) => setEditCourseData({ ...editCourseData, lecture_hours: e.target.value })}
+                      value={editCourseData.lecture_hrs}
+                      onChange={(e) => setEditCourseData({ ...editCourseData, lecture_hrs: e.target.value })}
                       placeholder="3"
                       min="0"
                       className="input-custom"
                     />
                   </div>
+                  )}
 
+                  {!(curriculumTemplate === '2022' && editCourseData.course_type === 'Lab') && (
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Theory (hrs per week)</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tutorial (hrs per week)</label>
                     <input
                       type="number"
-                      value={editCourseData.theory_per_week}
-                      onChange={(e) => setEditCourseData({ ...editCourseData, theory_per_week: e.target.value })}
+                      value={editCourseData.tutorial_hrs}
+                      onChange={(e) => setEditCourseData({ ...editCourseData, tutorial_hrs: e.target.value })}
                       placeholder="0"
                       min="0"
                       className="input-custom"
                     />
                   </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Practical (hrs per week)</label>
                     <input
                       type="number"
-                      value={editCourseData.practical_per_week}
-                      onChange={(e) => setEditCourseData({ ...editCourseData, practical_per_week: e.target.value })}
+                      value={editCourseData.practical_hrs}
+                      onChange={(e) => setEditCourseData({ ...editCourseData, practical_hrs: e.target.value })}
                       placeholder="2"
                       min="0"
                       className="input-custom"
@@ -823,8 +985,8 @@ function SemesterDetailPage() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Activity (hrs per week)</label>
                       <input
                         type="number"
-                        value={editCourseData.activity_hours}
-                        onChange={(e) => setEditCourseData({ ...editCourseData, activity_hours: e.target.value })}
+                        value={editCourseData.activity_hrs}
+                        onChange={(e) => setEditCourseData({ ...editCourseData, activity_hrs: e.target.value })}
                         placeholder="0"
                         min="0"
                         className="input-custom"
@@ -879,102 +1041,267 @@ function SemesterDetailPage() {
                       <h3 className="text-sm font-bold text-gray-900 mb-3">Total Hours (for whole semester)</h3>
                     </div>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS</label>
-                        <input
-                          type="number"
-                          value={editCourseData.theory_hours}
-                          onChange={(e) => setEditCourseData({ ...editCourseData, theory_hours: e.target.value })}
-                          placeholder="0"
-                          min="0"
-                          className="input-custom"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS</label>
-                        <input
-                          type="number"
-                          value={editCourseData.tutorial_hours}
-                          onChange={(e) => setEditCourseData({ ...editCourseData, tutorial_hours: e.target.value })}
-                          placeholder="0"
-                          min="0"
-                          className="input-custom"
-                        />
-                      </div>
-
-                      {curriculumTemplate !== '2022' && (
+                    {curriculumTemplate === '2026' ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">ACTIVITY HOURS</label>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
                           <input
                             type="number"
-                            value={editCourseData.activity_hours}
-                            onChange={(e) => setEditCourseData({ ...editCourseData, activity_hours: e.target.value })}
+                            value={(parseInt(editCourseData.lecture_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.tutorial_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">ACTIVITY HOURS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.activity_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={((parseInt(editCourseData.lecture_hrs) || 0) * 15) + ((parseInt(editCourseData.tutorial_hrs) || 0) * 15) + ((parseInt(editCourseData.activity_hrs) || 0) * 15)}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.theory_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, theory_hours: e.target.value })}
                             placeholder="0"
                             min="0"
                             className="input-custom"
                           />
                         </div>
-                      )}
 
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
-                        <input
-                          type="number"
-                          value={(parseInt(editCourseData.theory_hours) || 0) + (parseInt(editCourseData.tutorial_hours) || 0) + (curriculumTemplate !== '2022' ? (parseInt(editCourseData.activity_hours) || 0) : 0)}
-                          readOnly
-                          className="input-custom bg-gray-100 cursor-not-allowed"
-                        />
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HOURS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.tutorial_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, tutorial_hours: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.theory_hours) || 0) + (parseInt(editCourseData.tutorial_hours) || 0)}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
 
-                {/* Total Hours for whole semester - Experiment */}
-                {editCourseData.course_type === 'Experiment' && (
+                {/* Total Hours for whole semester - Theory&Lab */}
+                {editCourseData.course_type === 'Theory&Lab' && (
                   <>
                     <div className="border-t pt-4 mt-4">
                       <h3 className="text-sm font-bold text-gray-900 mb-3">Total Hours (for whole semester)</h3>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS</label>
-                        <input
-                          type="number"
-                          value={editCourseData.practical_hours}
-                          onChange={(e) => setEditCourseData({ ...editCourseData, practical_hours: e.target.value })}
-                          placeholder="0"
-                          min="0"
-                          className="input-custom"
-                        />
-                      </div>
+                    {curriculumTemplate === '2026' ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.lecture_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          {curriculumTemplate === '2022' ? 'TWS/SL HRS' : 'TUTORIAL HOURS'}
-                        </label>
-                        <input
-                          type="number"
-                          value={editCourseData.tutorial_hours}
-                          onChange={(e) => setEditCourseData({ ...editCourseData, tutorial_hours: e.target.value })}
-                          placeholder="0"
-                          min="0"
-                          className="input-custom"
-                        />
-                      </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.tutorial_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL (Auto)</label>
-                        <input
-                          type="number"
-                          value={(parseInt(editCourseData.practical_hours) || 0) + (parseInt(editCourseData.tutorial_hours) || 0)}
-                          readOnly
-                          className="input-custom bg-gray-100 cursor-not-allowed"
-                        />
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.practical_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={((parseInt(editCourseData.lecture_hrs) || 0) * 15) + ((parseInt(editCourseData.tutorial_hrs) || 0) * 15) + ((parseInt(editCourseData.practical_hrs) || 0) * 15)}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
                       </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">THEORY HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.theory_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, theory_hours: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TUTORIAL HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.tutorial_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, tutorial_hours: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.practical_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, practical_hours: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.theory_hours) || 0) + (parseInt(editCourseData.tutorial_hours) || 0) + (parseInt(editCourseData.practical_hours) || 0)}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Total Hours for whole semester - Lab */}
+                {editCourseData.course_type === 'Lab' && (
+                  <>
+                    <div className="border-t pt-4 mt-4">
+                      <h3 className="text-sm font-bold text-gray-900 mb-3">Total Hours (for whole semester)</h3>
                     </div>
+                    
+                    {curriculumTemplate === '2026' ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.practical_hrs) || 0) * 15}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TW/SL HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.tw_sl_hrs}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, tw_sl_hrs: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL HRS (Auto)</label>
+                          <input
+                            type="number"
+                            value={((parseInt(editCourseData.practical_hrs) || 0) * 15) + (parseInt(editCourseData.tw_sl_hrs) || 0)}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">PRACTICAL HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.practical_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, practical_hours: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TW/SL HRS</label>
+                          <input
+                            type="number"
+                            value={editCourseData.tutorial_hours}
+                            onChange={(e) => setEditCourseData({ ...editCourseData, tutorial_hours: e.target.value })}
+                            placeholder="0"
+                            min="0"
+                            className="input-custom"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">TOTAL (Auto)</label>
+                          <input
+                            type="number"
+                            value={(parseInt(editCourseData.practical_hours) || 0) + (parseInt(editCourseData.tutorial_hours) || 0)}
+                            readOnly
+                            className="input-custom bg-gray-100 cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 

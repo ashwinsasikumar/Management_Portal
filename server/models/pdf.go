@@ -2,7 +2,7 @@ package models
 
 // RegulationPDF represents all data needed for PDF generation
 type RegulationPDF struct {
-	RegulationID       int                `json:"regulation_id"`
+	CurriculumID       int                `json:"curriculum_id"`
 	RegulationName     string             `json:"regulation_name"`
 	AcademicYear       string             `json:"academic_year"`
 	CurriculumTemplate string             `json:"curriculum_template"`
@@ -19,10 +19,9 @@ type SemesterPDF struct {
 }
 
 type HonourCardPDF struct {
-	ID             int                 `json:"id"`
-	Title          string              `json:"title"`
-	SemesterNumber int                 `json:"semester_number"`
-	Verticals      []HonourVerticalPDF `json:"verticals"`
+	ID        int                 `json:"id"`
+	Title     string              `json:"title"`
+	Verticals []HonourVerticalPDF `json:"verticals"`
 }
 
 type HonourVerticalPDF struct {
