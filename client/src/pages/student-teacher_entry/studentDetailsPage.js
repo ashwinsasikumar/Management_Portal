@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import MainLayout from '../../components/MainLayout'
 import { API_BASE_URL } from '../../config'
 
 function StudentDetailsPage() {
   const [formData, setFormData] = useState({
-    student_id: '',
+    // Basic Student Fields
     enrollment_no: '',
     register_no: '',
     dte_reg_no: '',
@@ -26,12 +26,75 @@ function StudentDetailsPage() {
     parent_occupation: '',
     designation: '',
     place_of_work: '',
-    parent_income: ''
+    parent_income: '',
+    
+    // Academic Details Fields
+    batch: '',
+    year: '',
+    semester: '',
+    degree_level: '',
+    section: '',
+    department: '',
+    student_category: '',
+    branch_type: '',
+    seat_category: '',
+    regulation: '',
+    quota: '',
+    university: '',
+    year_of_admission: '',
+    year_of_completion: '',
+    student_status: '',
+    curriculum_id: '',
+    
+    // Address Fields
+    permanent_address: '',
+    present_address: '',
+    residence_location: '',
+    
+    // Admission Payment Fields
+    dte_register_no: '',
+    dte_admission_no: '',
+    receipt_no: '',
+    receipt_date: '',
+    amount: '',
+    bank_name: '',
+    
+    // Contact Details Fields
+    parent_mobile: '',
+    student_mobile: '',
+    student_email: '',
+    parent_email: '',
+    official_email: '',
+    
+    // Hostel Details Fields
+    hosteller_type: '',
+    hostel_name: '',
+    room_no: '',
+    room_capacity: '',
+    room_type: '',
+    floor_no: '',
+    warden_name: '',
+    alternate_warden: '',
+    class_advisor: '',
+    
+    // Insurance Details Fields
+    nominee_name: '',
+    relationship: '',
+    nominee_age: '',
+    
+    // School Details - Array
+    school_details: [
+      { school_name: '', board: '', year_of_pass: '', state: '', tc_no: '', tc_date: '', total_marks: '' }
+    ]
   })
 
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [students, setStudents] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editingStudent, setEditingStudent] = useState(null)
 
   // Auto-calculate age from DOB
   const calculateAge = (dob) => {
@@ -43,7 +106,7 @@ function StudentDetailsPage() {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--
     }
-    return age
+    return age.toString()
   }
 
   const handleInputChange = (e) => {
@@ -65,6 +128,31 @@ function StudentDetailsPage() {
     }
   }
 
+  // Convert form data to proper types for backend (all strings)
+  const formatFormDataForSubmission = (data) => {
+    const formatted = { ...data }
+    // Ensure all numeric fields are strings
+    const numericFields = ['age', 'year', 'semester', 'year_of_admission', 'year_of_completion', 
+      'curriculum_id', 'parent_income', 'amount', 'room_capacity', 'floor_no', 'nominee_age']
+    
+    numericFields.forEach(field => {
+      if (formatted[field] !== undefined && formatted[field] !== null && formatted[field] !== '') {
+        formatted[field] = String(formatted[field])
+      }
+    })
+    
+    // Ensure school_details items have numeric fields as strings
+    if (formatted.school_details && Array.isArray(formatted.school_details)) {
+      formatted.school_details = formatted.school_details.map(school => ({
+        ...school,
+        year_of_pass: String(school.year_of_pass || ''),
+        total_marks: String(school.total_marks || '')
+      }))
+    }
+    
+    return formatted
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -72,51 +160,187 @@ function StudentDetailsPage() {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/students`, {
-        method: 'POST',
+      const url = editingStudent 
+        ? `${API_BASE_URL}/students/${editingStudent.student_id || editingStudent.id}`
+        : `${API_BASE_URL}/students`
+      
+      const method = editingStudent ? 'PUT' : 'POST'
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formatFormDataForSubmission(formData))
       })
 
       if (!response.ok) {
-        throw new Error('Failed to add student')
+        throw new Error(editingStudent ? 'Failed to update student' : 'Failed to add student')
       }
 
-      setSuccess('Student added successfully!')
-      // Reset form
-      setFormData({
-        student_id: '',
-        enrollment_no: '',
-        register_no: '',
-        dte_reg_no: '',
-        application_no: '',
-        admission_no: '',
-        student_name: '',
-        gender: '',
-        dob: '',
-        age: '',
-        father_name: '',
-        mother_name: '',
-        guardian_name: '',
-        religion: '',
-        nationality: 'Indian',
-        community: '',
-        mother_tongue: '',
-        blood_group: '',
-        aadhar_no: '',
-        parent_occupation: '',
-        designation: '',
-        place_of_work: '',
-        parent_income: ''
-      })
+      setSuccess(editingStudent ? 'Student updated successfully!' : 'Student added successfully!')
+      
+      // Reset form and state
+      resetForm()
+      setEditingStudent(null)
+      
+      // Refresh student list
+      await fetchStudents()
+      setShowForm(false)
     } catch (err) {
-      setError(err.message || 'Failed to add student')
+      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
+
+  // Convert DOB to YYYY-MM-DD format for HTML date input
+  const formatDateForInput = (dateStr) => {
+    if (!dateStr) return ''
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+    // Try to parse and reformat
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return ''
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    } catch (e) {
+      return ''
+    }
+  }
+
+  // Load student for editing
+  const loadStudentForEdit = async (studentId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/students/${studentId}`)
+      if (!res.ok) throw new Error('Failed to load student')
+      const student = await res.json()
+      
+      // Populate form with student data
+      setFormData(prev => ({
+        ...prev,
+        enrollment_no: student.enrollment_no || '',
+        register_no: student.register_no || '',
+        dte_reg_no: student.dte_reg_no || '',
+        application_no: student.application_no || '',
+        admission_no: student.admission_no || '',
+        student_name: student.student_name || '',
+        gender: student.gender || '',
+        dob: formatDateForInput(student.dob),
+        age: String(student.age || ''),
+        father_name: student.father_name || '',
+        mother_name: student.mother_name || '',
+        guardian_name: student.guardian_name || '',
+        religion: student.religion || '',
+        nationality: student.nationality || 'Indian',
+        community: student.community || '',
+        mother_tongue: student.mother_tongue || '',
+        blood_group: student.blood_group || '',
+        aadhar_no: student.aadhar_no || '',
+        parent_occupation: student.parent_occupation || '',
+        designation: student.designation || '',
+        place_of_work: student.place_of_work || '',
+        parent_income: student.parent_income || '',
+      }))
+      
+      setEditingStudent(student)
+      setShowForm(true)
+      setError('')
+    } catch (err) {
+      setError('Failed to load student details: ' + err.message)
+    }
+  }
+
+  // Reset form to initial state
+  const resetForm = () => {
+    setFormData({
+      enrollment_no: '',
+      register_no: '',
+      dte_reg_no: '',
+      application_no: '',
+      admission_no: '',
+      student_name: '',
+      gender: '',
+      dob: '',
+      age: '',
+      father_name: '',
+      mother_name: '',
+      guardian_name: '',
+      religion: '',
+      nationality: 'Indian',
+      community: '',
+      mother_tongue: '',
+      blood_group: '',
+      aadhar_no: '',
+      parent_occupation: '',
+      designation: '',
+      place_of_work: '',
+      parent_income: '',
+      batch: '',
+      year: '',
+      semester: '',
+      degree_level: '',
+      section: '',
+      department: '',
+      student_category: '',
+      branch_type: '',
+      seat_category: '',
+      regulation: '',
+      quota: '',
+      university: '',
+      year_of_admission: '',
+      year_of_completion: '',
+      student_status: '',
+      curriculum_id: '',
+      permanent_address: '',
+      present_address: '',
+      residence_location: '',
+      dte_register_no: '',
+      dte_admission_no: '',
+      receipt_no: '',
+      receipt_date: '',
+      amount: '',
+      bank_name: '',
+      parent_mobile: '',
+      student_mobile: '',
+      student_email: '',
+      parent_email: '',
+      official_email: '',
+      hosteller_type: '',
+      hostel_name: '',
+      room_no: '',
+      room_capacity: '',
+      room_type: '',
+      floor_no: '',
+      warden_name: '',
+      alternate_warden: '',
+      class_advisor: '',
+      nominee_name: '',
+      relationship: '',
+      nominee_age: '',
+      school_details: [
+        { school_name: '', board: '', year_of_pass: '', state: '', tc_no: '', tc_date: '', total_marks: '' }
+      ]
+    })
+  }
+
+  // Fetch list of students from API
+  const fetchStudents = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/students`)
+      if (!res.ok) throw new Error('Failed to fetch students')
+      const data = await res.json()
+      setStudents(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  useEffect(() => {
+    fetchStudents()
+  }, [])
 
   return (
     <MainLayout
@@ -143,9 +367,79 @@ function StudentDetailsPage() {
           </div>
         )}
 
-        {/* Student Entry Form */}
-        <div className="card-custom p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Add New Student</h2>
+        {/* Student List + Search (hidden when form shown) */}
+        {!showForm && (
+          <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Students</h2>
+            <div className="flex items-center space-x-3">
+              <input
+                type="search"
+                placeholder="Search by name, student id or enrollment..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input-custom w-64"
+              />
+              <button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="btn-primary-custom"
+              >
+                Create Student
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {students
+              .filter(s => {
+                if (!searchTerm) return true
+                const q = searchTerm.toLowerCase()
+                const name = (s.student_name || '').toLowerCase()
+                const id = (s.student_id || '').toLowerCase()
+                const enroll = (s.enrollment_no || '').toLowerCase()
+                return name.includes(q) || id.includes(q) || enroll.includes(q)
+              })
+              .map((s) => (
+                <div key={s.student_id || s.id} className="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="text-lg font-semibold text-gray-900">{s.student_name || '—'}</h3>
+                  <p className="text-sm text-gray-600">ID: {s.student_id || '—'}</p>
+                  <p className="text-sm text-gray-600">Enrollment: {s.enrollment_no || '—'}</p>
+                  <p className="text-sm text-gray-600">Age: {s.age || '—'}</p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadStudentForEdit(s.student_id || s.id)}
+                      className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+          </div>
+        )}
+
+        {/* Student Entry Form (toggleable) */}
+        {showForm && (
+          <div className="card-custom p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              {editingStudent ? 'Edit Student - ' + (editingStudent.student_name || 'Student') : 'Add New Student'}
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false)
+                setEditingStudent(null)
+                resetForm()
+              }}
+              className="text-gray-500 hover:text-gray-700 text-2xl"
+            >
+              ✕
+            </button>
+          </div>
           
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Identification Details */}
@@ -154,20 +448,21 @@ function StudentDetailsPage() {
                 Identification Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Student ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="student_id"
-                    value={formData.student_id}
-                    onChange={handleInputChange}
-                    required
-                    className="input-custom"
-                    placeholder="e.g., STU001"
-                  />
-                </div>
+                {/* Show Student ID only in edit mode (read-only) */}
+                {editingStudent && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Student ID (Auto-Generated)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingStudent.student_id || '—'}
+                      readOnly
+                      disabled
+                      className="input-custom bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -541,12 +836,220 @@ function StudentDetailsPage() {
               </div>
             </div>
 
-            {/* Submit Button */}
+            {/* Academic Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                Academic Details (Optional)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <input type="text" name="batch" placeholder="Batch" value={formData.batch} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="year" placeholder="Year" value={formData.year} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="semester" placeholder="Semester" value={formData.semester} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="degree_level" placeholder="Degree Level" value={formData.degree_level} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="section" placeholder="Section" value={formData.section} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="department" placeholder="Department" value={formData.department} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="student_category" placeholder="Student Category" value={formData.student_category} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="branch_type" placeholder="Branch Type" value={formData.branch_type} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="seat_category" placeholder="Seat Category" value={formData.seat_category} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="regulation" placeholder="Regulation" value={formData.regulation} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="quota" placeholder="Quota" value={formData.quota} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="university" placeholder="University" value={formData.university} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="year_of_admission" placeholder="Year of Admission" value={formData.year_of_admission} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="year_of_completion" placeholder="Year of Completion" value={formData.year_of_completion} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="student_status" placeholder="Student Status" value={formData.student_status} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="curriculum_id" placeholder="Curriculum ID" value={formData.curriculum_id} onChange={handleInputChange} className="input-custom" />
+              </div>
+            </div>
+
+            {/* Address Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                Address Details (Optional)
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <textarea name="permanent_address" placeholder="Permanent Address" value={formData.permanent_address} onChange={handleInputChange} rows="2" className="input-custom" />
+                <textarea name="present_address" placeholder="Present Address" value={formData.present_address} onChange={handleInputChange} rows="2" className="input-custom" />
+                <input type="text" name="residence_location" placeholder="Residence Location" value={formData.residence_location} onChange={handleInputChange} className="input-custom" />
+              </div>
+            </div>
+
+            {/* Contact Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                Contact Details (Optional)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <input type="tel" name="parent_mobile" placeholder="Parent Mobile" value={formData.parent_mobile} onChange={handleInputChange} className="input-custom" />
+                <input type="tel" name="student_mobile" placeholder="Student Mobile" value={formData.student_mobile} onChange={handleInputChange} className="input-custom" />
+                <input type="email" name="student_email" placeholder="Student Email" value={formData.student_email} onChange={handleInputChange} className="input-custom" />
+                <input type="email" name="parent_email" placeholder="Parent Email" value={formData.parent_email} onChange={handleInputChange} className="input-custom" />
+                <input type="email" name="official_email" placeholder="Official Email" value={formData.official_email} onChange={handleInputChange} className="input-custom" />
+              </div>
+            </div>
+
+            {/* Admission Payment Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                Admission Payment (Optional)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <input type="text" name="dte_register_no" placeholder="DTE Register No" value={formData.dte_register_no} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="dte_admission_no" placeholder="DTE Admission No" value={formData.dte_admission_no} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="receipt_no" placeholder="Receipt No" value={formData.receipt_no} onChange={handleInputChange} className="input-custom" />
+                <input type="date" name="receipt_date" placeholder="Receipt Date" value={formData.receipt_date} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="amount" placeholder="Amount" value={formData.amount} onChange={handleInputChange} className="input-custom" step="0.01" />
+                <input type="text" name="bank_name" placeholder="Bank Name" value={formData.bank_name} onChange={handleInputChange} className="input-custom" />
+              </div>
+            </div>
+
+            {/* Hostel Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                Hostel Details (Optional)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <input type="text" name="hosteller_type" placeholder="Hosteller Type" value={formData.hosteller_type} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="hostel_name" placeholder="Hostel Name" value={formData.hostel_name} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="room_no" placeholder="Room No" value={formData.room_no} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="room_capacity" placeholder="Room Capacity" value={formData.room_capacity} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="room_type" placeholder="Room Type" value={formData.room_type} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="floor_no" placeholder="Floor No" value={formData.floor_no} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="warden_name" placeholder="Warden Name" value={formData.warden_name} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="alternate_warden" placeholder="Alternate Warden" value={formData.alternate_warden} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="class_advisor" placeholder="Class Advisor" value={formData.class_advisor} onChange={handleInputChange} className="input-custom" />
+              </div>
+            </div>
+
+            {/* Insurance Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                Insurance Details (Optional)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <input type="text" name="nominee_name" placeholder="Nominee Name" value={formData.nominee_name} onChange={handleInputChange} className="input-custom" />
+                <input type="text" name="relationship" placeholder="Relationship" value={formData.relationship} onChange={handleInputChange} className="input-custom" />
+                <input type="number" name="nominee_age" placeholder="Nominee Age" value={formData.nominee_age} onChange={handleInputChange} className="input-custom" />
+              </div>
+            </div>
+
+            {/* School Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
+                School Details (Optional - Multiple schools)
+              </h3>
+              {formData.school_details && formData.school_details.map((school, idx) => (
+                <div key={idx} className="mb-4 p-4 border border-gray-200 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <input 
+                      type="text" 
+                      placeholder="School Name" 
+                      value={school.school_name} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].school_name = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Board" 
+                      value={school.board} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].board = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Year of Pass" 
+                      value={school.year_of_pass} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].year_of_pass = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="State" 
+                      value={school.state} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].state = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="TC No" 
+                      value={school.tc_no} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].tc_no = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                    />
+                    <input 
+                      type="date" 
+                      placeholder="TC Date" 
+                      value={school.tc_date} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].tc_date = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Total Marks" 
+                      value={school.total_marks} 
+                      onChange={(e) => {
+                        const newSchools = [...formData.school_details];
+                        newSchools[idx].total_marks = e.target.value;
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="input-custom" 
+                      step="0.01"
+                    />
+                  </div>
+                  {formData.school_details.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSchools = formData.school_details.filter((_, i) => i !== idx);
+                        setFormData({...formData, school_details: newSchools});
+                      }}
+                      className="mt-2 px-4 py-2 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50"
+                    >
+                      Remove School
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData({
+                    ...formData,
+                    school_details: [...formData.school_details, { school_name: '', board: '', year_of_pass: '', state: '', tc_no: '', tc_date: '', total_marks: '' }]
+                  });
+                }}
+                className="px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded hover:bg-blue-50"
+              >
+                + Add Another School
+              </button>
+            </div>
             <div className="flex justify-end space-x-4 pt-4">
               <button
                 type="button"
                 onClick={() => setFormData({
-                  student_id: '',
                   enrollment_no: '',
                   register_no: '',
                   dte_reg_no: '',
@@ -568,22 +1071,82 @@ function StudentDetailsPage() {
                   parent_occupation: '',
                   designation: '',
                   place_of_work: '',
-                  parent_income: ''
+                  parent_income: '',
+                  batch: '',
+                  year: '',
+                  semester: '',
+                  degree_level: '',
+                  section: '',
+                  department: '',
+                  student_category: '',
+                  branch_type: '',
+                  seat_category: '',
+                  regulation: '',
+                  quota: '',
+                  university: '',
+                  year_of_admission: '',
+                  year_of_completion: '',
+                  student_status: '',
+                  curriculum_id: '',
+                  permanent_address: '',
+                  present_address: '',
+                  residence_location: '',
+                  dte_register_no: '',
+                  dte_admission_no: '',
+                  receipt_no: '',
+                  receipt_date: '',
+                  amount: '',
+                  bank_name: '',
+                  parent_mobile: '',
+                  student_mobile: '',
+                  student_email: '',
+                  parent_email: '',
+                  official_email: '',
+                  hosteller_type: '',
+                  hostel_name: '',
+                  room_no: '',
+                  room_capacity: '',
+                  room_type: '',
+                  floor_no: '',
+                  warden_name: '',
+                  alternate_warden: '',
+                  class_advisor: '',
+                  nominee_name: '',
+                  relationship: '',
+                  nominee_age: '',
+                  school_details: [
+                    { school_name: '', board: '', year_of_pass: '', state: '', tc_no: '', tc_date: '', total_marks: '' }
+                  ]
                 })}
                 className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
               >
                 Reset
               </button>
               <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false)
+                  setEditingStudent(null)
+                  resetForm()
+                }}
+                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
                 type="submit"
                 disabled={loading}
                 className="btn-primary-custom disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Adding Student...' : 'Add Student'}
+                {editingStudent 
+                  ? (loading ? 'Updating Student...' : 'Update Student')
+                  : (loading ? 'Adding Student...' : 'Add Student')
+                }
               </button>
             </div>
           </form>
         </div>
+        )}
       </div>
     </MainLayout>
   )
