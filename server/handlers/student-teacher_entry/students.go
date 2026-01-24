@@ -44,6 +44,7 @@ func GetStudents(w http.ResponseWriter, r *http.Request) {
 				COALESCE(parent_income, 0), 
 				COALESCE(status, 1)
 			FROM students
+			WHERE status = 1
 			ORDER BY student_id DESC
 		`
 
@@ -922,7 +923,7 @@ func UpdateStudent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeleteStudent deletes a student record
+// DeleteStudent deletes a student record (Soft Delete)
 func DeleteStudent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -930,7 +931,7 @@ func DeleteStudent(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	studentID := vars["id"]
 
-	query := `DELETE FROM students WHERE student_id = ?`
+	query := `UPDATE students SET status = 0 WHERE student_id = ?`
 	result, err := db.DB.Exec(query, studentID)
 	if err != nil {
 		log.Printf("Error deleting student: %v", err)

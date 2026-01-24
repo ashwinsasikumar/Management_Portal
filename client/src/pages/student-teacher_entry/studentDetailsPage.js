@@ -1,5 +1,6 @@
   import React, { useState, useEffect } from 'react'
   import MainLayout from '../../components/MainLayout'
+  import StudentCard from '../../components/StudentCard'
   import { API_BASE_URL } from '../../config'
 
   function StudentDetailsPage() {
@@ -340,6 +341,22 @@
       }
     }
 
+    const handleDelete = async (id) => {
+      if (window.confirm('Are you sure you want to delete this student?')) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/students/${id}`, {
+            method: 'DELETE',
+          })
+          if (!res.ok) throw new Error('Failed to delete student')
+          setSuccess('Student deleted successfully')
+          fetchStudents()
+        } catch (err) {
+          console.error(err)
+          setError(err.message)
+        }
+      }
+    }
+
     // Reset form to initial state
     const resetForm = () => {
       setFormData({
@@ -495,27 +512,18 @@
                 .filter(s => {
                   if (!searchTerm) return true
                   const q = searchTerm.toLowerCase()
-                  const name = (s.student_name || '').toLowerCase()
-                  const id = (s.student_id || '').toLowerCase()
-                  const enroll = (s.enrollment_no || '').toLowerCase()
+                  const name = String(s.student_name || '').toLowerCase()
+                  const id = String(s.student_id || s.id || '').toLowerCase()
+                  const enroll = String(s.enrollment_no || '').toLowerCase()
                   return name.includes(q) || id.includes(q) || enroll.includes(q)
                 })
                 .map((s) => (
-                  <div key={s.student_id || s.id} className="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
-                    <h3 className="text-lg font-semibold text-gray-900">{s.student_name || '—'}</h3>
-                    <p className="text-sm text-gray-600">ID: {s.student_id || '—'}</p>
-                    <p className="text-sm text-gray-600">Enrollment: {s.enrollment_no || '—'}</p>
-                    <p className="text-sm text-gray-600">Age: {s.age || '—'}</p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => loadStudentForEdit(s.student_id || s.id)}
-                        className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
+                  <StudentCard 
+                    key={s.student_id || s.id} 
+                    student={s} 
+                    onEdit={loadStudentForEdit}
+                    onDelete={handleDelete}
+                  />
                 ))}
             </div>
             </div>
