@@ -90,8 +90,8 @@ func main() {
 	// Setup routes
 	router := routes.SetupRoutes()
 
-	// Wrap with CORS middleware
-	handler := middleware.CORSMiddleware(router)
+	// Wrap with Recovery middleware (catches panics) then CORS middleware
+	handler := middleware.CORSMiddleware(middleware.RecoveryMiddleware(router))
 
 	fmt.Println("Server started at http://localhost:5000")
 	log.Fatal(http.ListenAndServe(":5000", handler))
