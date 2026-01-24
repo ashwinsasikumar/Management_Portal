@@ -1,6 +1,24 @@
 package middleware
 
-import "net/http"
+import (
+	"log"
+	"net/http"
+)
+
+// RecoveryMiddleware catches panics and logs them
+func RecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("PANIC: %v", err)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"Internal server error"}`))
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
