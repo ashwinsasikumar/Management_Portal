@@ -1,11 +1,32 @@
 import React from "react";
+import { API_BASE_URL } from "../config";
 
 function TeacherCard({ teacher, onEdit, onDelete }) {
+  // Get base URL without /api for static files
+  const baseUrl = API_BASE_URL.replace("/api", "");
+  const imageUrl = teacher.profile_img
+    ? `${baseUrl}${teacher.profile_img}`
+    : null;
+
   return (
     <div className="p-6 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
       {/* Avatar and Name */}
       <div className="flex items-center space-x-3 mb-4">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-2xl shadow-md flex-shrink-0">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={teacher.name}
+            className="w-16 h-16 rounded-full object-cover shadow-md flex-shrink-0 border-2 border-white"
+            onError={(e) => {
+              e.target.style.display = "none";
+              e.target.nextElementSibling.style.display = "flex";
+            }}
+          />
+        ) : null}
+        <div
+          className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-2xl shadow-md flex-shrink-0"
+          style={{ display: imageUrl ? "none" : "flex" }}
+        >
           {teacher.name ? teacher.name.charAt(0).toUpperCase() : "T"}
         </div>
         <div className="flex-1 min-w-0">
@@ -13,7 +34,7 @@ function TeacherCard({ teacher, onEdit, onDelete }) {
             {teacher.name || "—"}
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            {teacher.designation || "—"}
+            {teacher.designation || teacher.desg || "—"}
           </p>
         </div>
       </div>

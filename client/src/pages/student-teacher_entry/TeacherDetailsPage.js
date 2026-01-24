@@ -22,6 +22,8 @@ function TeacherDetailsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState(null);
+  const [profileFile, setProfileFile] = useState(null);
+  const [profilePreview, setProfilePreview] = useState("");
 
   // Fetch teachers from backend
   const fetchTeachers = async () => {
@@ -51,6 +53,29 @@ function TeacherDetailsPage() {
     }));
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        setError("Please select a valid image file");
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image size should be less than 5MB");
+        return;
+      }
+      setProfileFile(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -58,13 +83,25 @@ function TeacherDetailsPage() {
     setLoading(true);
 
     try {
+      // Create FormData for file upload
+      const formDataToSend = new FormData();
+      formDataToSend.append("name", formData.name);
+      formDataToSend.append("email", formData.email);
+      formDataToSend.append("phone", formData.phone);
+      formDataToSend.append("department", formData.department);
+      formDataToSend.append("designation", formData.designation);
+
+      if (profileFile) {
+        formDataToSend.append("profile_img", profileFile);
+      }
+
       if (editingTeacher) {
         // Check if anything was changed
         const isChanged =
           formData.name !== editingTeacher.name ||
           formData.email !== editingTeacher.email ||
           formData.phone !== (editingTeacher.phone || "") ||
-          formData.profile_img !== (editingTeacher.profile_img || "") ||
+          profileFile !== null ||
           formData.department !== (editingTeacher.department || "") ||
           formData.designation !==
             (editingTeacher.desg || editingTeacher.designation || "");
@@ -82,10 +119,7 @@ function TeacherDetailsPage() {
           `${API_BASE_URL}/teachers/${editingTeacher.id}`,
           {
             method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(formData),
+            body: formDataToSend,
           },
         );
 
@@ -105,10 +139,7 @@ function TeacherDetailsPage() {
         // Create new teacher
         const response = await fetch(`${API_BASE_URL}/teachers`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
+          body: formDataToSend,
         });
 
         if (!response.ok) {
@@ -142,6 +173,8 @@ function TeacherDetailsPage() {
       department: "",
       designation: "",
     });
+    setProfileFile(null);
+    setProfilePreview("");
   };
 
   const handleEdit = (teacher) => {
@@ -156,6 +189,14 @@ function TeacherDetailsPage() {
     setEditingTeacher(teacher);
     setShowForm(true);
     setError("");
+    setProfileFile(null);
+    if (teacher.profile_img) {
+      // Remove /api from URL for static files
+      const baseUrl = API_BASE_URL.replace("/api", "");
+      setProfilePreview(`${baseUrl}${teacher.profile_img}`);
+    } else {
+      setProfilePreview("");
+    }
   };
 
   const handleDelete = async (teacher) => {
@@ -342,16 +383,31 @@ function TeacherDetailsPage() {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Profile Image URL
+                      Profile Image
                     </label>
-                    <input
-                      type="text"
-                      name="profile_img"
-                      value={formData.profile_img}
-                      onChange={handleInputChange}
-                      className="input-custom"
-                      placeholder="https://example.com/image.jpg"
-                    />
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="input-custom"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Maximum file size: 5MB. Accepted formats: JPG, PNG,
+                          GIF
+                        </p>
+                      </div>
+                      {profilePreview && (
+                        <div className="flex-shrink-0">
+                          <img
+                            src={profilePreview}
+                            alt="Preview"
+                            className="w-24 h-24 object-cover rounded-lg border border-gray-300"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div>

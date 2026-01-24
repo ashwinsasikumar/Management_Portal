@@ -3,10 +3,15 @@ package studentteacher
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"server/db"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -129,40 +134,111 @@ func GetTeacherByID(w http.ResponseWriter, r *http.Request) {
 func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	var input TeacherInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		log.Printf("Error decoding request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// Handle OPTIONS request for CORS
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+	// Parse multipart form data (max 10MB)
+	err := r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		log.Printf("Error parsing multipart form: %v", err)
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
+
+	// Extract form fields
+	name := r.FormValue("name")
+	email := r.FormValue("email")
+	phone := r.FormValue("phone")
+	department := r.FormValue("department")
+	designation := r.FormValue("designation")
+
 	// Validate required fields
-	if input.Name == "" || input.Email == "" {
+	if name == "" || email == "" {
 		http.Error(w, "Name and email are required", http.StatusBadRequest)
+		return
+	}
+
+	// Handle file upload
+	var profileImgPath *string
+	file, header, err := r.FormFile("profile_img")
+	if err == nil {
+		defer file.Close()
+
+		// Create uploads directory if it doesn't exist
+		uploadDir := "./uploads/teachers"
+		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+			log.Printf("Error creating upload directory: %v", err)
+			http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate unique filename
+		ext := filepath.Ext(header.Filename)
+		filename := fmt.Sprintf("teacher_%d%s", time.Now().Unix(), ext)
+		filepath := filepath.Join(uploadDir, filename)
+
+		// Create the file
+		dst, err := os.Create(filepath)
+		if err != nil {
+			log.Printf("Error creating file: %v", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+		defer dst.Close()
+
+		// Copy the uploaded file to the destination
+		if _, err := io.Copy(dst, file); err != nil {
+			log.Printf("Error copying file: %v", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+
+		// Store the relative path to save in database
+		relativePath := "/uploads/teachers/" + filename
+		profileImgPath = &relativePath
+		log.Printf("File uploaded successfully: %s", relativePath)
+	} else if err != http.ErrMissingFile {
+		log.Printf("Error retrieving file: %v", err)
+		http.Error(w, "Failed to retrieve file", http.StatusBadRequest)
 		return
 	}
 
 	// Get department ID from department name
 	var deptID *int
-	if input.Department != "" {
+	if department != "" {
 		var tempDeptID int
-		err := db.DB.QueryRow("SELECT id FROM departments WHERE department_name = ?", input.Department).Scan(&tempDeptID)
+		err := db.DB.QueryRow("SELECT id FROM departments WHERE department_name = ?", department).Scan(&tempDeptID)
 		if err == nil {
 			deptID = &tempDeptID
 		} else {
-			log.Printf("Warning: Department '%s' not found: %v", input.Department, err)
+			log.Printf("Warning: Department '%s' not found: %v", department, err)
 			// Try to insert the department if it doesn't exist
-			result, insertErr := db.DB.Exec("INSERT INTO departments (department_name, status) VALUES (?, 1)", input.Department)
+			result, insertErr := db.DB.Exec("INSERT INTO departments (department_name, status) VALUES (?, 1)", department)
 			if insertErr == nil {
 				newID, _ := result.LastInsertId()
 				tempDeptID = int(newID)
 				deptID = &tempDeptID
-				log.Printf("Created new department '%s' with ID %d", input.Department, tempDeptID)
+				log.Printf("Created new department '%s' with ID %d", department, tempDeptID)
 			} else {
-				log.Printf("Failed to create department '%s': %v", input.Department, insertErr)
+				log.Printf("Failed to create department '%s': %v", department, insertErr)
 			}
 		}
+	}
+
+	// Prepare optional fields
+	var phonePtr *string
+	if phone != "" {
+		phonePtr = &phone
+	}
+	var desgPtr *string
+	if designation != "" {
+		desgPtr = &designation
 	}
 
 	// Insert teacher with status = 1 (active) by default
@@ -173,17 +249,17 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.DB.Exec(
 		query,
-		input.Name,
-		input.Email,
-		input.Phone,
-		input.ProfileImg,
+		name,
+		email,
+		phonePtr,
+		profileImgPath,
 		deptID,
-		input.Desg,
+		desgPtr,
 	)
 
 	if err != nil {
 		log.Printf("Error creating teacher: %v", err)
-		if err.Error() == "Error 1062: Duplicate entry" {
+		if strings.Contains(err.Error(), "Duplicate entry") {
 			http.Error(w, "Teacher with this email already exists", http.StatusConflict)
 		} else {
 			http.Error(w, "Failed to create teacher", http.StatusInternalServerError)
@@ -215,13 +291,13 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 	// Fetch and return the created teacher
 	createdTeacher := Teacher{
 		ID:         teacherID,
-		Name:       input.Name,
-		Email:      input.Email,
-		Phone:      input.Phone,
-		ProfileImg: input.ProfileImg,
+		Name:       name,
+		Email:      email,
+		Phone:      phonePtr,
+		ProfileImg: profileImgPath,
 		Dept:       deptID,
-		Department: &input.Department,
-		Desg:       input.Desg,
+		Department: &department,
+		Desg:       desgPtr,
 		Status:     1,
 	}
 
@@ -233,6 +309,14 @@ func CreateTeacher(w http.ResponseWriter, r *http.Request) {
 func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle OPTIONS request for CORS
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	vars := mux.Vars(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
@@ -241,39 +325,122 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input TeacherInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		log.Printf("Error decoding request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// Parse multipart form data (max 10MB)
+	err = r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		log.Printf("Error parsing multipart form: %v", err)
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
 		return
 	}
 
+	// Extract form fields
+	name := r.FormValue("name")
+	email := r.FormValue("email")
+	phone := r.FormValue("phone")
+	department := r.FormValue("department")
+	designation := r.FormValue("designation")
+
 	// Validate required fields
-	if input.Name == "" || input.Email == "" {
+	if name == "" || email == "" {
 		http.Error(w, "Name and email are required", http.StatusBadRequest)
+		return
+	}
+
+	// Get existing teacher to check current profile_img
+	var existingProfileImg *string
+	err = db.DB.QueryRow("SELECT profile_img FROM teachers WHERE id = ? AND status = 1", id).Scan(&existingProfileImg)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Teacher not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error fetching existing teacher: %v", err)
+		http.Error(w, "Failed to fetch teacher", http.StatusInternalServerError)
+		return
+	}
+
+	// Handle file upload
+	profileImgPath := existingProfileImg
+	file, header, err := r.FormFile("profile_img")
+	if err == nil {
+		defer file.Close()
+
+		// Delete old profile image if exists
+		if existingProfileImg != nil && *existingProfileImg != "" {
+			oldFilePath := "." + *existingProfileImg
+			if err := os.Remove(oldFilePath); err != nil {
+				log.Printf("Warning: Failed to delete old profile image: %v", err)
+			}
+		}
+
+		// Create uploads directory if it doesn't exist
+		uploadDir := "./uploads/teachers"
+		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+			log.Printf("Error creating upload directory: %v", err)
+			http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate unique filename
+		ext := filepath.Ext(header.Filename)
+		filename := fmt.Sprintf("teacher_%d%s", time.Now().Unix(), ext)
+		filepath := filepath.Join(uploadDir, filename)
+
+		// Create the file
+		dst, err := os.Create(filepath)
+		if err != nil {
+			log.Printf("Error creating file: %v", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+		defer dst.Close()
+
+		// Copy the uploaded file to the destination
+		if _, err := io.Copy(dst, file); err != nil {
+			log.Printf("Error copying file: %v", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+
+		// Store the relative path to save in database
+		relativePath := "/uploads/teachers/" + filename
+		profileImgPath = &relativePath
+		log.Printf("File uploaded successfully: %s", relativePath)
+	} else if err != http.ErrMissingFile {
+		log.Printf("Error retrieving file: %v", err)
+		http.Error(w, "Failed to retrieve file", http.StatusBadRequest)
 		return
 	}
 
 	// Get department ID from department name
 	var deptID *int
-	if input.Department != "" {
+	if department != "" {
 		var tempDeptID int
-		err := db.DB.QueryRow("SELECT id FROM departments WHERE department_name = ?", input.Department).Scan(&tempDeptID)
+		err := db.DB.QueryRow("SELECT id FROM departments WHERE department_name = ?", department).Scan(&tempDeptID)
 		if err == nil {
 			deptID = &tempDeptID
 		} else {
-			log.Printf("Warning: Department '%s' not found: %v", input.Department, err)
+			log.Printf("Warning: Department '%s' not found: %v", department, err)
 			// Try to insert the department if it doesn't exist
-			result, insertErr := db.DB.Exec("INSERT INTO departments (department_name, status) VALUES (?, 1)", input.Department)
+			result, insertErr := db.DB.Exec("INSERT INTO departments (department_name, status) VALUES (?, 1)", department)
 			if insertErr == nil {
 				newID, _ := result.LastInsertId()
 				tempDeptID = int(newID)
 				deptID = &tempDeptID
-				log.Printf("Created new department '%s' with ID %d", input.Department, tempDeptID)
+				log.Printf("Created new department '%s' with ID %d", department, tempDeptID)
 			} else {
-				log.Printf("Failed to create department '%s': %v", input.Department, insertErr)
+				log.Printf("Failed to create department '%s': %v", department, insertErr)
 			}
 		}
+	}
+
+	// Prepare optional fields
+	var phonePtr *string
+	if phone != "" {
+		phonePtr = &phone
+	}
+	var desgPtr *string
+	if designation != "" {
+		desgPtr = &designation
 	}
 
 	// Update teacher
@@ -285,12 +452,12 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.DB.Exec(
 		query,
-		input.Name,
-		input.Email,
-		input.Phone,
-		input.ProfileImg,
+		name,
+		email,
+		phonePtr,
+		profileImgPath,
 		deptID,
-		input.Desg,
+		desgPtr,
 		id,
 	)
 
@@ -336,13 +503,13 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 	// Fetch and return the updated teacher
 	updatedTeacher := Teacher{
 		ID:         id,
-		Name:       input.Name,
-		Email:      input.Email,
-		Phone:      input.Phone,
-		ProfileImg: input.ProfileImg,
+		Name:       name,
+		Email:      email,
+		Phone:      phonePtr,
+		ProfileImg: profileImgPath,
 		Dept:       deptID,
-		Department: &input.Department,
-		Desg:       input.Desg,
+		Department: &department,
+		Desg:       desgPtr,
 		Status:     1,
 	}
 

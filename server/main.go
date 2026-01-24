@@ -90,6 +90,11 @@ func main() {
 	// Setup routes
 	router := routes.SetupRoutes()
 
+	// Serve static files from uploads directory
+	uploadDir := http.Dir("./uploads")
+	fileServer := http.FileServer(uploadDir)
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", fileServer))
+
 	// Wrap with CORS middleware
 	handler := middleware.CORSMiddleware(router)
 
