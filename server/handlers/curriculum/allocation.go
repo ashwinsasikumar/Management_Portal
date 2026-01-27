@@ -52,7 +52,7 @@ func GetCourseAllocations(w http.ResponseWriter, r *http.Request) {
 	// 2. Fetch all allocations for these courses in this academic year
 	allocationQuery := `
 		SELECT ca.id, ca.course_id, ca.teacher_id, t.name, ca.academic_year, ca.semester, ca.section, ca.role
-		FROM course_allocations ca
+		FROM teacher_course_allocation ca
 		JOIN teachers t ON ca.teacher_id = t.id
 		WHERE ca.academic_year = ? AND ca.status = 1
 	`
@@ -106,7 +106,7 @@ func CreateAllocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		INSERT INTO course_allocations (course_id, teacher_id, academic_year, semester, section, role, status)
+		INSERT INTO teacher_course_allocation (course_id, teacher_id, academic_year, semester, section, role, status)
 		VALUES (?, ?, ?, ?, ?, ?, 1)
 		ON DUPLICATE KEY UPDATE status = 1, role = VALUES(role), section = VALUES(section)
 	`
@@ -129,7 +129,7 @@ func DeleteAllocation(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	query := `UPDATE course_allocations SET status = 0 WHERE id = ?`
+	query := `UPDATE teacher_course_allocation SET status = 0 WHERE id = ?`
 	_, err := db.DB.Exec(query, id)
 	if err != nil {
 		log.Printf("Error deleting allocation: %v", err)
@@ -156,7 +156,7 @@ func UpdateAllocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		UPDATE course_allocations 
+		UPDATE teacher_course_allocation 
 		SET teacher_id = ?, role = ?, section = ?, semester = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ? AND status = 1
 	`
@@ -186,7 +186,7 @@ func GetTeacherCourses(w http.ResponseWriter, r *http.Request) {
 		SELECT 
 			ca.id, ca.course_id, c.course_code, c.course_name, c.course_type, 
 			c.credit, ca.academic_year, ca.semester, ca.section, ca.role
-		FROM course_allocations ca
+		FROM teacher_course_allocation ca
 		JOIN courses c ON ca.course_id = c.course_id
 		WHERE ca.teacher_id = ? AND ca.status = 1
 	`
@@ -257,7 +257,7 @@ func GetCourseTeachers(w http.ResponseWriter, r *http.Request) {
 		SELECT 
 			ca.id, ca.teacher_id, t.name, t.email, t.dept, d.department_name,
 			ca.academic_year, ca.semester, ca.section, ca.role
-		FROM course_allocations ca
+		FROM teacher_course_allocation ca
 		JOIN teachers t ON ca.teacher_id = t.id
 		LEFT JOIN departments d ON t.dept = d.id
 		WHERE ca.course_id = ? AND ca.status = 1
@@ -330,7 +330,7 @@ func GetUnassignedCourses(w http.ResponseWriter, r *http.Request) {
 		JOIN curriculum_courses cc ON c.course_id = cc.course_id
 		WHERE cc.semester_id = ? AND c.status = 1 AND cc.status = 1
 		AND NOT EXISTS (
-			SELECT 1 FROM course_allocations ca
+			SELECT 1 FROM teacher_course_allocation ca
 			WHERE ca.course_id = c.course_id 
 			AND ca.academic_year = ?
 			AND ca.status = 1
@@ -403,7 +403,7 @@ func GetAllocationSummary(w http.ResponseWriter, r *http.Request) {
 	// Assigned courses (with primary teacher)
 	err = db.DB.QueryRow(`
 		SELECT COUNT(DISTINCT ca.course_id)
-		FROM course_allocations ca
+		FROM teacher_course_allocation ca
 		JOIN curriculum_courses cc ON ca.course_id = cc.course_id
 		WHERE cc.semester_id = ? AND ca.academic_year = ? 
 		AND ca.status = 1 AND ca.role = 'Primary'
@@ -423,7 +423,7 @@ func GetAllocationSummary(w http.ResponseWriter, r *http.Request) {
 	// Active teachers (assigned to at least one course in this semester)
 	err = db.DB.QueryRow(`
 		SELECT COUNT(DISTINCT ca.teacher_id)
-		FROM course_allocations ca
+		FROM teacher_course_allocation ca
 		JOIN curriculum_courses cc ON ca.course_id = cc.course_id
 		WHERE cc.semester_id = ? AND ca.academic_year = ? AND ca.status = 1
 	`, semesterID, academicYear).Scan(&summary.ActiveTeachers)
