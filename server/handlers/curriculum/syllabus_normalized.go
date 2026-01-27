@@ -1,4 +1,4 @@
-package handlers
+package curriculum
 
 import (
 	"database/sql"

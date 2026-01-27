@@ -94,6 +94,7 @@
     const [loading, setLoading] = useState(false)
     const [students, setStudents] = useState([])
     const [curriculums, setCurriculums] = useState([])
+    const [departments, setDepartments] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
     const [showForm, setShowForm] = useState(false)
     const [editingStudent, setEditingStudent] = useState(null)
@@ -454,15 +455,48 @@
       }
     }
 
+    // Fetch list of departments from API
+    const fetchDepartments = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/departments`)
+        if (!res.ok) throw new Error('Failed to fetch departments')
+        const data = await res.json()
+        setDepartments(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Error fetching departments:', err)
+      }
+    }
+
     useEffect(() => {
       fetchStudents()
       fetchCurriculums()
+      fetchDepartments()
     }, [])
 
     return (
       <MainLayout
         title="Student Details"
         subtitle="Add and manage student information"
+        actions={
+          !showForm && (
+            <div className="flex items-center space-x-3">
+              <input
+                type="search"
+                placeholder="Search by name, student id, or enrollment..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input-custom w-64"
+              />
+              <button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="btn-primary-custom"
+              >
+                Create Student
+              </button>
+            </div>
+          )
+        }
       >
         <div className="max-w-6xl mx-auto">
           {/* Messages */}
@@ -484,28 +518,9 @@
             </div>
           )}
 
-          {/* Student List + Search (hidden when form shown) */}
+          {/* Student List (hidden when form shown) */}
           {!showForm && (
             <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">Students</h2>
-              <div className="flex items-center space-x-3">
-                <input
-                  type="search"
-                  placeholder="Search by name, student id or enrollment..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="input-custom w-64"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowForm(true)}
-                  className="btn-primary-custom"
-                >
-                  Create Student
-                </button>
-              </div>
-            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {students
@@ -972,7 +987,20 @@
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1">Department <span className="text-red-500">*</span></label>
-                    <input type="text" name="department" placeholder="Department" value={formData.department} onChange={handleInputChange} required className="input-custom" />
+                    <select
+                      name="department"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      required
+                      className="input-custom"
+                    >
+                      <option value="">Select Department</option>
+                      {departments.map(dept => (
+                        <option key={dept.id} value={dept.department_name}>
+                          {dept.department_name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <input type="text" name="student_category" placeholder="Student Category" value={formData.student_category} onChange={handleInputChange} className="input-custom" />
                   <input type="text" name="branch_type" placeholder="Branch Type" value={formData.branch_type} onChange={handleInputChange} className="input-custom" />

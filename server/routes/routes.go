@@ -18,6 +18,9 @@ func SetupRoutes() *mux.Router {
 		w.Write([]byte("OK"))
 	}).Methods("GET")
 
+	// Department routes
+	router.HandleFunc("/api/departments", curriculum.GetDepartments).Methods("GET", "OPTIONS")
+
 	// Curriculum routes
 	router.HandleFunc("/api/curriculum", curriculum.GetRegulations).Methods("GET", "OPTIONS")
 	router.HandleFunc("/api/curriculum/create", curriculum.CreateRegulation).Methods("POST", "OPTIONS")
