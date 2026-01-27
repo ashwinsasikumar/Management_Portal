@@ -114,6 +114,16 @@ func SetupRoutes() *mux.Router {
 	// PDF Generation route
 	router.HandleFunc("/api/curriculum/{id}/pdf", curriculum.GenerateRegulationPDFHTML).Methods("GET", "OPTIONS")
 
+	// Course Allocation routes
+	router.HandleFunc("/api/allocations", curriculum.GetCourseAllocations).Methods("GET", "OPTIONS")
+	router.HandleFunc("/api/allocations", curriculum.CreateAllocation).Methods("POST", "OPTIONS")
+	router.HandleFunc("/api/allocations/{id}", curriculum.UpdateAllocation).Methods("PUT", "OPTIONS")
+	router.HandleFunc("/api/allocations/{id}", curriculum.DeleteAllocation).Methods("DELETE", "OPTIONS")
+	router.HandleFunc("/api/allocations/unassigned", curriculum.GetUnassignedCourses).Methods("GET", "OPTIONS")
+	router.HandleFunc("/api/allocations/summary", curriculum.GetAllocationSummary).Methods("GET", "OPTIONS")
+	router.HandleFunc("/api/teachers/{id}/courses", curriculum.GetTeacherCourses).Methods("GET", "OPTIONS")
+	router.HandleFunc("/api/courses/{id}/teachers", curriculum.GetCourseTeachers).Methods("GET", "OPTIONS")
+
 	// Cluster Management routes
 	router.HandleFunc("/api/clusters", curriculum.GetClusters).Methods("GET", "OPTIONS")
 	router.HandleFunc("/api/clusters", curriculum.CreateCluster).Methods("POST", "OPTIONS")
