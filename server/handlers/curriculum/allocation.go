@@ -28,7 +28,7 @@ func GetCourseAllocations(w http.ResponseWriter, r *http.Request) {
 		SELECT c.course_id, c.course_code, c.course_name, c.course_type, c.credit
 		FROM courses c
 		JOIN curriculum_courses cc ON c.course_id = cc.course_id
-		WHERE cc.semester_id = ? AND cc.status = 1 AND c.status = 1
+		WHERE cc.semester_id = ? AND c.status = 1
 	`
 	rows, err := db.DB.Query(courseQuery, semesterID)
 	if err != nil {
@@ -394,7 +394,7 @@ func GetAllocationSummary(w http.ResponseWriter, r *http.Request) {
 		SELECT COUNT(DISTINCT c.course_id)
 		FROM courses c
 		JOIN curriculum_courses cc ON c.course_id = cc.course_id
-		WHERE cc.semester_id = ? AND c.status = 1 AND cc.status = 1
+		WHERE cc.semester_id = ? AND c.status = 1
 	`, semesterID).Scan(&summary.TotalCourses)
 	if err != nil {
 		log.Printf("Error counting total courses: %v", err)
